@@ -221,11 +221,70 @@ curl -u admin:aiops123 http://localhost:3000/api/datasources
    - 缓存命中率
    - 向量检索性能
 
+## ⚠️ CPU隔离配置 - 实验环境关键设置
+
+### 🎯 为什么需要CPU隔离
+AIOps系统用于模拟不同CPU使用率场景，**资源隔离至关重要**：
+- 每个服务独占CPU核心，避免相互影响
+- 监控数据更精确，每个服务只显示一条CPU曲线
+- 便于模拟各种资源压力情况
+
+### 🐧 Linux环境 (推荐) - 完整CPU核心隔离
+
+```bash
+# 手动启动各服务，每个绑定专用CPU核心
+docker run -d --name aiops-mysql \
+  --cpuset-cpus="0" --cpus="1.0" \
+  --network aiopspolaris_aiops-network \
+  mysql:8.0
+
+docker run -d --name aiops-redis \
+  --cpuset-cpus="3" --cpus="1.0" \
+  --network aiopspolaris_aiops-network \
+  redis:7.2-alpine
+```
+
+**效果**：
+- ✅ 容器只看到分配的CPU核心
+- ✅ cAdvisor只报告该核心的指标
+- ✅ Dashboard显示单条连续线
+
+### 🍎 MacBook环境 - 仅CPU时间限制
+
+**⚠️ 重要限制**：MacBook上Docker Desktop不支持cpuset，只能限制CPU使用率
+
+```yaml
+# docker-compose.yml - MacBook适用
+deploy:
+  resources:
+    limits:
+      cpus: '0.25'    # 限制25% CPU使用率
+    reservations:
+      cpus: '0.1'     # 保证10% CPU
+```
+
+**⚠️ MacBook问题**：
+- 容器仍能看到所有CPU核心
+- cAdvisor仍报告所有32个CPU指标  
+- Dashboard仍显示多条线
+
+### 🔧 Dashboard查询修复
+
+无论哪种环境，都需要聚合CPU查询：
+```promql
+# 修复前：显示多条线
+rate(container_cpu_usage_seconds_total{name=~"aiops-.*"}[5m]) * 100
+
+# 修复后：每服务只显示一条线
+sum by (name) (rate(container_cpu_usage_seconds_total{name=~"aiops-.*"}[5m])) * 100
+```
+
 ## 📝 重要文件清单
 
-- `docker-compose.yml`: 新增cAdvisor服务
+- `docker-compose.yml`: 新增cAdvisor服务，CPU限制配置
+- `restart_with_cpu_isolation.sh`: Linux环境CPU隔离脚本
 - `docker/prometheus/prometheus.yml`: 增强监控配置
-- `docker/grafana/dashboards/docker-services-monitoring.json`: 新仪表盘
+- `docker/grafana/dashboards/docker-services-monitoring.json`: 修复CPU图表显示
 - `docs/docker_monitoring_upgrade.md`: 本文档
 
 ---
