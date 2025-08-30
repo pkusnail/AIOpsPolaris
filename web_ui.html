@@ -226,6 +226,26 @@
 
     <script>
         const API_BASE_URL = 'http://localhost:8888';
+        
+        // 添加请求拦截器处理CORS
+        async function apiRequest(url, options = {}) {
+            try {
+                const response = await fetch(url, {
+                    mode: 'cors',
+                    credentials: 'omit',
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        ...options.headers
+                    }
+                });
+                return response;
+            } catch (error) {
+                console.error('API request failed:', error);
+                throw error;
+            }
+        }
         const messagesContainer = document.getElementById('messages');
         const messageInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
@@ -269,11 +289,8 @@
             updateStatus('正在处理您的请求...', 'loading');
 
             try {
-                const response = await fetch(`${API_BASE_URL}/chat`, {
+                const response = await apiRequest(`${API_BASE_URL}/chat`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
                     body: JSON.stringify({
                         message: message,
                         user_id: userId,
@@ -303,7 +320,7 @@
         async function checkHealth() {
             updateStatus('检查系统状态...', 'loading');
             try {
-                const response = await fetch(`${API_BASE_URL}/health`);
+                const response = await apiRequest(`${API_BASE_URL}/health`);
                 const result = await response.json();
                 
                 let statusMsg = `系统状态: ${result.status}\\n`;
@@ -325,7 +342,7 @@
         async function getStats() {
             updateStatus('获取数据统计...', 'loading');
             try {
-                const response = await fetch(`${API_BASE_URL}/stats`);
+                const response = await apiRequest(`${API_BASE_URL}/stats`);
                 const result = await response.json();
                 
                 let statsMsg = '📊 系统数据统计:\\n';
@@ -354,11 +371,8 @@
             
             updateStatus('搜索知识库...', 'loading');
             
-            fetch(`${API_BASE_URL}/search`, {
+            apiRequest(`${API_BASE_URL}/search`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
                 body: JSON.stringify({
                     query: query,
                     search_type: 'hybrid',

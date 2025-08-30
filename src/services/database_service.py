@@ -42,6 +42,7 @@ class DatabaseService:
                 )
                 db.add(new_session)
                 await db.flush()
+                await db.commit()
                 await db.refresh(new_session)
                 return new_session
             except Exception as e:
