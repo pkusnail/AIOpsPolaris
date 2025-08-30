@@ -1,0 +1,352 @@
+{
+  "id": null,
+  "title": "AIOps Docker服务监控详细视图",
+  "uid": "docker-services-monitoring",
+    "tags": ["aiops", "docker", "services"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Docker服务总览",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "up{job!=\"prometheus\"}",
+            "refId": "A",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true, "__name__": true, "monitor": true},
+              "renameByName": {
+                "Value": "状态 (1=在线 0=离线)",
+                "instance": "服务地址 (IP:端口)",
+                "job": "监控任务",
+                "service_name": "服务名称",
+                "service_type": "服务类型"
+              }
+            }
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "center",
+              "width": 150
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "状态 (1=在线 0=离线)"},
+              "properties": [
+                {
+                  "id": "custom.cellOptions",
+                  "value": {
+                    "type": "color-background"
+                  }
+                },
+                {
+                  "id": "thresholds",
+                  "value": {
+                    "steps": [
+                      {"color": "red", "value": 0},
+                      {"color": "green", "value": 1}
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      
+      {
+        "id": 2,
+        "title": "各服务 CPU 使用率 (%)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{name=~\"aiops-.*\"}[5m]) * 100",
+            "refId": "A",
+            "legendFormat": "{{name}} ({{image}})"
+          }
+        ],
+        "yAxes": [
+          {"min": 0, "max": 100, "unit": "percent"},
+          {"show": false}
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true,
+          "alignAsTable": true
+        },
+        "tooltip": {
+          "shared": true,
+          "sort": 2,
+          "value_type": "individual"
+        }
+      },
+      
+      {
+        "id": 3,
+        "title": "各服务内存使用情况 (MB)",
+        "type": "graph", 
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "container_memory_usage_bytes{name=~\"aiops-.*\"} / 1024 / 1024",
+            "refId": "A",
+            "legendFormat": "{{name}} 使用量"
+          },
+          {
+            "expr": "container_spec_memory_limit_bytes{name=~\"aiops-.*\"} / 1024 / 1024",
+            "refId": "B", 
+            "legendFormat": "{{name}} 限制"
+          }
+        ],
+        "yAxes": [
+          {"min": 0, "unit": "short"},
+          {"show": false}
+        ],
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true,
+          "alignAsTable": true
+        }
+      },
+      
+      {
+        "id": 4,
+        "title": "网络 I/O 统计 (KB/s)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(container_network_receive_bytes_total{name=~\"aiops-.*\"}[5m]) / 1024",
+            "refId": "A",
+            "legendFormat": "{{name}} 入流量"
+          },
+          {
+            "expr": "rate(container_network_transmit_bytes_total{name=~\"aiops-.*\"}[5m]) / 1024",
+            "refId": "B",
+            "legendFormat": "{{name}} 出流量"
+          }
+        ],
+        "yAxes": [
+          {"min": 0, "unit": "KBs"},
+          {"show": false}
+        ]
+      },
+      
+      {
+        "id": 5,
+        "title": "磁盘 I/O 统计 (KB/s)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(container_fs_reads_bytes_total{name=~\"aiops-.*\"}[5m]) / 1024",
+            "refId": "A",
+            "legendFormat": "{{name}} 读取"
+          },
+          {
+            "expr": "rate(container_fs_writes_bytes_total{name=~\"aiops-.*\"}[5m]) / 1024", 
+            "refId": "B",
+            "legendFormat": "{{name}} 写入"
+          }
+        ],
+        "yAxes": [
+          {"min": 0, "unit": "KBs"},
+          {"show": false}
+        ]
+      },
+      
+      {
+        "id": 6,
+        "title": "API 服务请求统计",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "sum(rate(aiops_http_requests_total[5m]))",
+            "refId": "A",
+            "legendFormat": "总请求/秒"
+          },
+          {
+            "expr": "sum(rate(aiops_http_requests_total{status_code!=\"200\"}[5m]))",
+            "refId": "B", 
+            "legendFormat": "错误请求/秒"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 10},
+                {"color": "red", "value": 50}
+              ]
+            }
+          }
+        }
+      },
+      
+      {
+        "id": 7,
+        "title": "服务响应时间 (秒)",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 24},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(aiops_http_request_duration_seconds_bucket[5m]))",
+            "refId": "A",
+            "legendFormat": "API 95th"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(aiops_llm_request_duration_seconds_bucket[5m]))",
+            "refId": "B",
+            "legendFormat": "LLM 95th"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        }
+      },
+      
+      {
+        "id": 8,
+        "title": "容器重启统计",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 24},
+        "targets": [
+          {
+            "expr": "sum(container_start_time_seconds{name=~\"aiops-.*\"}) by (name)",
+            "refId": "A",
+            "legendFormat": "{{name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "dateTimeAsIso",
+            "color": {"mode": "thresholds"}
+          }
+        }
+      },
+      
+      {
+        "id": 9,
+        "title": "各数据库服务连接统计",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30},
+        "targets": [
+          {
+            "expr": "mysql_global_status_threads_connected",
+            "refId": "A",
+            "format": "table",
+            "instant": true,
+            "legendFormat": "MySQL连接数"
+          },
+          {
+            "expr": "redis_connected_clients",
+            "refId": "B", 
+            "format": "table",
+            "instant": true,
+            "legendFormat": "Redis连接数"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "merge",
+            "options": {}
+          },
+          {
+            "id": "organize", 
+            "options": {
+              "excludeByName": {"Time": true, "__name__": true},
+              "renameByName": {
+                "Value": "连接数",
+                "instance": "服务地址",
+                "job": "数据库类型"
+              }
+            }
+          }
+        ]
+      },
+      
+      {
+        "id": 10,
+        "title": "LLM服务使用统计",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30},
+        "targets": [
+          {
+            "expr": "rate(aiops_llm_requests_total[5m])",
+            "refId": "A",
+            "legendFormat": "{{provider}} {{status}} 请求/秒"
+          },
+          {
+            "expr": "rate(aiops_llm_tokens_total[5m])",
+            "refId": "B",
+            "legendFormat": "{{provider}} {{type}} tokens/秒"
+          }
+        ],
+        "yAxes": [
+          {"min": 0, "unit": "short"},
+          {"show": false}
+        ]
+      }
+    ],
+    
+    "templating": {
+      "list": [
+        {
+          "name": "service",
+          "type": "query",
+          "query": "label_values(up, service_name)",
+          "refresh": 1,
+          "includeAll": true,
+          "allValue": ".*"
+        }
+      ]
+    },
+    
+    "annotations": {
+      "list": [
+        {
+          "name": "服务重启",
+          "datasource": "Prometheus",
+          "expr": "resets(container_start_time_seconds{name=~\"aiops-.*\"}[1h]) > 0",
+          "iconColor": "red"
+        }
+      ]
+    },
+    
+    "schemaVersion": 30,
+    "version": 1,
+    "links": []
+}

@@ -1,7 +1,7 @@
 {
-  "dashboard": {
-    "id": null,
-    "title": "AIOps Polaris 综合监控仪表盘",
+  "id": null,
+  "title": "AIOps Polaris 综合监控仪表盘",
+  "uid": "aiops-comprehensive",
     "tags": ["aiops", "monitoring"],
     "timezone": "browser",
     "refresh": "30s",
@@ -322,5 +322,4 @@
     "schemaVersion": 30,
     "version": 1,
     "links": []
-  }
 }

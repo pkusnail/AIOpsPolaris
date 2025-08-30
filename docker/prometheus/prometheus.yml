@@ -1,6 +1,8 @@
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  external_labels:
+    monitor: 'aiops-monitor'
 
 rule_files:
   # - "first_rules.yml"
@@ -11,6 +13,7 @@ scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+    scrape_interval: 30s
 
   # API服务监控
   - job_name: 'aiops-api'
@@ -18,8 +21,82 @@ scrape_configs:
       - targets: ['api:8000']
     metrics_path: '/metrics'
     scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        replacement: 'aiops-api'
+      - source_labels: [__address__]
+        target_label: service_type
+        replacement: 'fastapi-backend'
 
-  # Neo4j监控 (需要启用metrics插件)
+  # Docker容器监控 (cAdvisor)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        replacement: 'cadvisor'
+      - source_labels: [__address__]
+        target_label: service_type
+        replacement: 'container-monitor'
+
+  # Grafana监控
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 60s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        replacement: 'aiops-grafana'
+      - source_labels: [__address__]
+        target_label: service_type
+        replacement: 'visualization'
+
+  # Redis监控 (通过redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        replacement: 'aiops-redis'
+      - source_labels: [__address__]
+        target_label: service_type
+        replacement: 'cache-database'
+
+  # MySQL监控 (通过mysqld_exporter)
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['mysql:3306']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        replacement: 'aiops-mysql'
+      - source_labels: [__address__]
+        target_label: service_type
+        replacement: 'relational-database'
+
+  # Weaviate监控
+  - job_name: 'weaviate'
+    static_configs:
+      - targets: ['weaviate:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        replacement: 'aiops-weaviate'
+      - source_labels: [__address__]
+        target_label: service_type
+        replacement: 'vector-database'
+
+  # Neo4j监控
   - job_name: 'neo4j'
     static_configs:
       - targets: ['neo4j:7474']
@@ -28,6 +105,13 @@ scrape_configs:
     basic_auth:
       username: 'neo4j'
       password: 'aiops123'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service_name
+        replacement: 'aiops-neo4j'
+      - source_labels: [__address__]
+        target_label: service_type
+        replacement: 'graph-database'
 
 alerting:
   alertmanagers:
