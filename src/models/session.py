@@ -23,7 +23,7 @@ class UserSession(Base):
     created_at = Column(DateTime, default=func.now(), index=True)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     is_active = Column(Boolean, default=True)
-    metadata = Column(JSON, nullable=True)
+    session_metadata = Column(JSON, nullable=True)
 
     # 关联会话消息
     messages = relationship("SessionMessage", back_populates="session", cascade="all, delete-orphan")
@@ -43,7 +43,7 @@ class SessionMessage(Base):
     created_at = Column(DateTime, default=func.now(), index=True)
     tokens_used = Column(Integer, default=0)
     processing_time = Column(Float, default=0.0)
-    metadata = Column(JSON, nullable=True)
+    message_metadata = Column(JSON, nullable=True)
 
     # 关联用户会话
     session = relationship("UserSession", back_populates="messages")
@@ -53,7 +53,7 @@ class SessionMessage(Base):
 class UserSessionCreate(BaseModel):
     """创建用户会话请求模型"""
     user_id: str = Field(..., description="用户ID")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="会话元数据")
+    session_metadata: Optional[Dict[str, Any]] = Field(None, description="会话元数据")
 
 
 class UserSessionResponse(BaseModel):
@@ -64,7 +64,7 @@ class UserSessionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_active: bool
-    metadata: Optional[Dict[str, Any]] = None
+    session_metadata: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
@@ -74,7 +74,7 @@ class SessionMessageCreate(BaseModel):
     """创建会话消息请求模型"""
     message: str = Field(..., description="用户消息")
     message_type: str = Field(default="user", description="消息类型")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="消息元数据")
+    message_metadata: Optional[Dict[str, Any]] = Field(None, description="消息元数据")
 
 
 class SessionMessageResponse(BaseModel):
@@ -88,7 +88,7 @@ class SessionMessageResponse(BaseModel):
     created_at: datetime
     tokens_used: int = 0
     processing_time: float = 0.0
-    metadata: Optional[Dict[str, Any]] = None
+    message_metadata: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True

@@ -4,8 +4,6 @@
 """
 
 import weaviate
-from weaviate.classes.config import Property, DataType
-from weaviate.classes.query import Filter
 from typing import List, Dict, Any, Optional, Tuple
 import logging
 import json
@@ -120,8 +118,8 @@ class VectorService:
                     },
                     {
                         "name": "properties",
-                        "dataType": ["object"],
-                        "description": "Entity properties as JSON"
+                        "dataType": ["text"],
+                        "description": "Entity properties as JSON string"
                     },
                     {
                         "name": "mysql_id",
@@ -159,8 +157,8 @@ class VectorService:
                     },
                     {
                         "name": "metadata",
-                        "dataType": ["object"],
-                        "description": "Additional metadata"
+                        "dataType": ["text"],
+                        "description": "Additional metadata as JSON string"
                     }
                 ],
                 "vectorizer": "none"

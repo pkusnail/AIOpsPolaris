@@ -1,0 +1,44 @@
+# 最小化依赖包，用于快速测试
+
+# Web框架
+fastapi
+uvicorn[standard]
+gradio
+
+# 数据库
+sqlalchemy
+aiomysql
+asyncpg
+alembic
+
+# Neo4j图数据库
+neo4j
+py2neo
+
+# Weaviate向量数据库
+weaviate-client
+
+# Redis缓存
+redis
+aioredis
+
+# NLP和机器学习
+transformers
+sentence-transformers
+spacy
+numpy
+pandas
+
+# HTTP客户端
+httpx
+aiohttp
+
+# 工具库
+python-dotenv
+pyyaml
+click
+rich
+
+# 基础依赖
+pydantic
+requests

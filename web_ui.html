@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIOps Polaris 智能运维助手</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 900px;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin-bottom: 10px;
+            font-size: 1.8em;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+        
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            background: #f8f9fa;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 10px;
+            max-width: 80%;
+        }
+        
+        .user-message {
+            background: #007bff;
+            color: white;
+            margin-left: auto;
+        }
+        
+        .bot-message {
+            background: #e9ecef;
+            color: #333;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        .message-input:focus {
+            border-color: #667eea;
+        }
+        
+        .send-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.2s;
+        }
+        
+        .send-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status-bar {
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+            font-size: 0.85em;
+            color: #666;
+        }
+        
+        .loading {
+            color: #667eea;
+            font-style: italic;
+        }
+        
+        .error {
+            color: #dc3545;
+        }
+        
+        .success {
+            color: #28a745;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            max-width: 250px;
+        }
+        
+        .sidebar h3 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 1em;
+        }
+        
+        .sidebar button {
+            width: 100%;
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+        
+        .sidebar button:hover {
+            background: #f8f9fa;
+        }
+        
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AIOps Polaris</h1>
+            <p>基于RAG + 混合搜索 + 多Agent架构的智能运维助手</p>
+        </div>
+        
+        <div class="chat-container">
+            <div class="messages" id="messages"></div>
+            
+            <div class="input-container">
+                <input 
+                    type="text" 
+                    class="message-input" 
+                    id="messageInput" 
+                    placeholder="输入您的运维问题..."
+                    onkeypress="handleKeyPress(event)"
+                >
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+        
+        <div class="status-bar">
+            <span id="statusText">🟢 系统已连接</span>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <h3>🔧 快捷操作</h3>
+        <button onclick="checkHealth()">🔍 系统状态</button>
+        <button onclick="getStats()">📊 数据统计</button>
+        <button onclick="searchKnowledge()">🔍 搜索知识库</button>
+        <button onclick="clearChat()">🗑️ 清空对话</button>
+        
+        <h3 style="margin-top: 15px;">💡 示例问题</h3>
+        <button onclick="askExample('服务器CPU使用率过高怎么办？')">CPU过高问题</button>
+        <button onclick="askExample('数据库连接超时如何排查？')">数据库问题</button>
+        <button onclick="askExample('微服务监控最佳实践')">监控实践</button>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8888';
+        const messagesContainer = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusText = document.getElementById('statusText');
+        
+        let userId = 'web_user_' + Date.now();
+
+        function updateStatus(message, type = 'info') {
+            const emoji = type === 'error' ? '❌' : type === 'loading' ? '🔄' : '🟢';
+            statusText.innerHTML = `${emoji} ${message}`;
+            statusText.className = type;
+        }
+
+        function addMessage(content, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            
+            if (isUser) {
+                messageDiv.innerHTML = `<strong>👤 您:</strong><br>${escapeHtml(content)}`;
+            } else {
+                messageDiv.innerHTML = `<strong>🤖 AIOps助手:</strong><br><pre>${escapeHtml(content)}</pre>`;
+            }
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            addMessage(message, true);
+            messageInput.value = '';
+            sendBtn.disabled = true;
+            updateStatus('正在处理您的请求...', 'loading');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        user_id: userId,
+                        temperature: 0.7
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    const botResponse = result.response || '系统处理完成';
+                    addMessage(botResponse);
+                    updateStatus(`处理完成 (${result.processing_time?.toFixed(2)}s)`, 'success');
+                } else {
+                    addMessage(`错误: ${result.message || '处理失败'}`, false);
+                    updateStatus('处理失败', 'error');
+                }
+            } catch (error) {
+                addMessage(`连接错误: ${error.message}`, false);
+                updateStatus('连接失败', 'error');
+            } finally {
+                sendBtn.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        async function checkHealth() {
+            updateStatus('检查系统状态...', 'loading');
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                const result = await response.json();
+                
+                let statusMsg = `系统状态: ${result.status}\\n`;
+                if (result.components) {
+                    statusMsg += '组件状态:\\n';
+                    for (const [name, info] of Object.entries(result.components)) {
+                        statusMsg += `- ${name}: ${info.status}\\n`;
+                    }
+                }
+                
+                addMessage(statusMsg, false);
+                updateStatus('状态检查完成', 'success');
+            } catch (error) {
+                addMessage(`健康检查失败: ${error.message}`, false);
+                updateStatus('检查失败', 'error');
+            }
+        }
+
+        async function getStats() {
+            updateStatus('获取数据统计...', 'loading');
+            try {
+                const response = await fetch(`${API_BASE_URL}/stats`);
+                const result = await response.json();
+                
+                let statsMsg = '📊 系统数据统计:\\n';
+                for (const [key, value] of Object.entries(result)) {
+                    if (typeof value === 'object') {
+                        statsMsg += `${key}:\\n`;
+                        for (const [subKey, subValue] of Object.entries(value)) {
+                            statsMsg += `  - ${subKey}: ${subValue}\\n`;
+                        }
+                    } else {
+                        statsMsg += `${key}: ${value}\\n`;
+                    }
+                }
+                
+                addMessage(statsMsg, false);
+                updateStatus('统计信息获取完成', 'success');
+            } catch (error) {
+                addMessage(`统计信息获取失败: ${error.message}`, false);
+                updateStatus('获取失败', 'error');
+            }
+        }
+
+        function searchKnowledge() {
+            const query = prompt('请输入搜索关键词:');
+            if (!query) return;
+            
+            updateStatus('搜索知识库...', 'loading');
+            
+            fetch(`${API_BASE_URL}/search`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    query: query,
+                    search_type: 'hybrid',
+                    limit: 5
+                })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.documents && result.documents.length > 0) {
+                    let searchResults = `🔍 搜索结果 "${query}":\\n\\n`;
+                    result.documents.forEach((doc, index) => {
+                        searchResults += `${index + 1}. 📄 ${doc.title || 'Untitled'}\\n`;
+                        searchResults += `   📂 来源: ${doc.source || 'unknown'}\\n`;
+                        const content = doc.content || '';
+                        const shortContent = content.length > 150 ? content.substring(0, 150) + '...' : content;
+                        searchResults += `   📝 内容: ${shortContent}\\n\\n`;
+                    });
+                    addMessage(searchResults, false);
+                } else {
+                    addMessage(`未找到关键词 "${query}" 的相关文档`, false);
+                }
+                updateStatus('搜索完成', 'success');
+            })
+            .catch(error => {
+                addMessage(`搜索失败: ${error.message}`, false);
+                updateStatus('搜索失败', 'error');
+            });
+        }
+
+        function askExample(question) {
+            messageInput.value = question;
+            sendMessage();
+        }
+
+        function clearChat() {
+            messagesContainer.innerHTML = '';
+            updateStatus('对话已清空', 'success');
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // 页面加载时检查系统状态
+        window.onload = function() {
+            addMessage('欢迎使用AIOps Polaris智能运维助手！\\n\\n您可以：\\n- 咨询运维相关问题\\n- 使用右侧快捷操作\\n- 尝试示例问题', false);
+            checkHealth();
+        };
+    </script>
+</body>
+</html>

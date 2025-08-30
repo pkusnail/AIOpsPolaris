@@ -29,7 +29,7 @@ class DatabaseService:
     async def create_user_session(
         self, 
         user_id: str, 
-        metadata: Optional[Dict[str, Any]] = None
+        session_metadata: Optional[Dict[str, Any]] = None
     ) -> UserSession:
         """创建用户会话"""
         async for db in get_database():
@@ -38,7 +38,7 @@ class DatabaseService:
                 new_session = UserSession(
                     user_id=user_id,
                     session_id=session_id,
-                    metadata=metadata or {}
+                    session_metadata=session_metadata or {}
                 )
                 db.add(new_session)
                 await db.flush()
@@ -121,7 +121,7 @@ class DatabaseService:
         message_type: str = "user",
         tokens_used: int = 0,
         processing_time: float = 0.0,
-        metadata: Optional[Dict[str, Any]] = None
+        message_metadata: Optional[Dict[str, Any]] = None
     ) -> SessionMessage:
         """保存会话消息"""
         async for db in get_database():
@@ -134,7 +134,7 @@ class DatabaseService:
                     message_type=message_type,
                     tokens_used=tokens_used,
                     processing_time=processing_time,
-                    metadata=metadata or {}
+                    message_metadata=message_metadata or {}
                 )
                 db.add(new_message)
                 await db.flush()
