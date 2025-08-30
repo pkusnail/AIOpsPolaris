@@ -77,9 +77,9 @@
         "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
         "targets": [
           {
-            "expr": "rate(container_cpu_usage_seconds_total{name=~\"aiops-.*\"}[5m]) * 100",
+            "expr": "sum by (name) (rate(container_cpu_usage_seconds_total{name=~\"aiops-.*\"}[5m])) * 100",
             "refId": "A",
-            "legendFormat": "{{name}} ({{image}})"
+            "legendFormat": "{{name}}"
           }
         ],
         "yAxes": [
@@ -96,7 +96,19 @@
           "shared": true,
           "sort": 2,
           "value_type": "individual"
-        }
+        },
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "pointradius": 1,
+        "points": false,
+        "renderer": "flot",
+        "seriesOverrides": [],
+        "spaceLength": 10,
+        "stack": false,
+        "steppedLine": false,
+        "thresholds": [],
+        "nullPointMode": "connected"
       },
       
       {
@@ -125,7 +137,19 @@
           "values": true,
           "current": true,
           "alignAsTable": true
-        }
+        },
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "pointradius": 1,
+        "points": false,
+        "renderer": "flot",
+        "seriesOverrides": [],
+        "spaceLength": 10,
+        "stack": false,
+        "steppedLine": false,
+        "thresholds": [],
+        "nullPointMode": "connected"
       },
       
       {
@@ -148,7 +172,20 @@
         "yAxes": [
           {"min": 0, "unit": "KBs"},
           {"show": false}
-        ]
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "pointradius": 1,
+        "points": false,
+        "renderer": "flot",
+        "seriesOverrides": [],
+        "spaceLength": 10,
+        "stack": false,
+        "steppedLine": false,
+        "thresholds": [],
+        "nullPointMode": "connected",
+        "legend": {"show": true, "alignAsTable": true}
       },
       
       {
@@ -171,7 +208,20 @@
         "yAxes": [
           {"min": 0, "unit": "KBs"},
           {"show": false}
-        ]
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "pointradius": 1,
+        "points": false,
+        "renderer": "flot",
+        "seriesOverrides": [],
+        "spaceLength": 10,
+        "stack": false,
+        "steppedLine": false,
+        "thresholds": [],
+        "nullPointMode": "connected",
+        "legend": {"show": true, "alignAsTable": true}
       },
       
       {
