@@ -22,6 +22,10 @@ services:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 20s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
 
   # Neo4j图数据库 - 知识图谱存储
   neo4j:
@@ -50,10 +54,14 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
 
   # Weaviate向量数据库 - 语义搜索
   weaviate:
-    image: semitechnologies/weaviate:1.22.4
+    image: semitechnologies/weaviate:1.23.7
     container_name: aiops-weaviate
     ports:
       - "8080:8080"
@@ -70,10 +78,14 @@ services:
       - aiops-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/.well-known/ready"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/v1/.well-known/ready"]
       interval: 30s
       timeout: 10s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
 
   # Redis缓存 - 会话缓存和任务队列
   redis:
@@ -92,34 +104,50 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
 
-  # vLLM服务 - LLM推理服务
+  # vLLM服务 - LLM推理服务 (CPU模式)
   vllm:
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.4.2
     container_name: aiops-vllm
     ports:
       - "8000:8000"
     environment:
-      VLLM_MODEL: "Qwen/Qwen2-7B-Instruct"
-      VLLM_GPU_MEMORY_UTILIZATION: "0.8"
-      VLLM_MAX_MODEL_LEN: "4096"
+      CUDA_VISIBLE_DEVICES: ""
+      VLLM_WORKER_USE_RAY: "false"
+    command: 
+      - --model
+      - Qwen/Qwen2.5-1.5B-Instruct
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --max-model-len
+      - "4096"
+      - --device
+      - cpu
+      - --enforce-eager
+      - --tensor-parallel-size
+      - "1"
+      - --trust-remote-code
     volumes:
       - huggingface_cache:/root/.cache/huggingface
     networks:
       - aiops-network
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 60s
-      timeout: 30s
+      interval: 120s
+      timeout: 60s
       retries: 3
+      start_period: 300s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
 
   # API服务 - FastAPI应用
   api:
@@ -138,6 +166,8 @@ services:
       - REDIS_URL=redis://:aiops123@redis:6379/0
       - VLLM_API_BASE=http://vllm:8000/v1
       - PYTHONPATH=/app
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     volumes:
       - ./src:/app/src
       - ./data:/app/data
@@ -153,14 +183,18 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      vllm:
-        condition: service_healthy
+      # vllm:
+      #   condition: service_healthy  # 暂时禁用vLLM依赖
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
 
   # Prometheus监控
   prometheus:
@@ -180,6 +214,10 @@ services:
     networks:
       - aiops-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
 
   # Grafana仪表盘
   grafana:
@@ -199,6 +237,10 @@ services:
     depends_on:
       - prometheus
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
 
   # Nginx反向代理
   nginx:
@@ -206,16 +248,18 @@ services:
     container_name: aiops-nginx
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./docker/nginx/ssl:/etc/ssl/certs
     networks:
       - aiops-network
     depends_on:
       - api
       - grafana
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
 
 volumes:
   mysql_data:

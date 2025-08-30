@@ -19,38 +19,15 @@ scrape_configs:
     metrics_path: '/metrics'
     scrape_interval: 30s
 
-  # MySQL监控
-  - job_name: 'mysql'
-    static_configs:
-      - targets: ['mysql:3306']
-    scrape_interval: 30s
-
-  # Neo4j监控
+  # Neo4j监控 (需要启用metrics插件)
   - job_name: 'neo4j'
     static_configs:
       - targets: ['neo4j:7474']
     metrics_path: '/metrics'
     scrape_interval: 30s
-
-  # Weaviate监控
-  - job_name: 'weaviate'
-    static_configs:
-      - targets: ['weaviate:8080']
-    metrics_path: '/v1/metrics'
-    scrape_interval: 30s
-
-  # Redis监控
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis:6379']
-    scrape_interval: 30s
-
-  # vLLM监控
-  - job_name: 'vllm'
-    static_configs:
-      - targets: ['vllm:8000']
-    metrics_path: '/metrics'
-    scrape_interval: 60s
+    basic_auth:
+      username: 'neo4j'
+      password: 'aiops123'
 
 alerting:
   alertmanagers:
