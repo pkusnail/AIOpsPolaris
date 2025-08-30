@@ -19,7 +19,7 @@ python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8888 --reload
 open web_ui.html
 
 # 方法二：使用文件路径
-file:///home/alejandroseaah/AIOpsPolaris/web_ui.html
+file://{ your local path to project }/AIOpsPolaris/web_ui.html
 ```
 
 ## 🎨 界面功能说明

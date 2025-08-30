@@ -166,7 +166,7 @@ echo "OPENAI_API_KEY=sk-your-openai-api-key-here" > .env
 # 在浏览器中打开
 open web_ui.html
 # 或直接访问文件路径
-file:///home/alejandroseaah/AIOpsPolaris/web_ui.html
+file:///{ your local path to project }/AIOpsPolaris/web_ui.html
 ```
 
 #### 💻 命令行工具
