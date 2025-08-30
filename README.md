@@ -552,9 +552,6 @@ docker-compose logs -f api-service
 4. 创建Pull Request
 5. 代码审查和合并
 
-## 许可证
-
-MIT License
 
 ---
 
