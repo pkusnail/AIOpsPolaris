@@ -2,7 +2,7 @@
 知识库相关模型
 """
 
-from sqlalchemy import Column, String, Text, DateTime, JSON, Float, BigInteger, ForeignKey, Index
+from sqlalchemy import Column, String, Text, DateTime, JSON, Float, Integer, BigInteger, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.mysql import ENUM

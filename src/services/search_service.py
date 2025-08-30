@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 import asyncio
 from collections import defaultdict
-import numpy as np
+import math
 
 from .vector_service import VectorService
 from .graph_service import GraphService

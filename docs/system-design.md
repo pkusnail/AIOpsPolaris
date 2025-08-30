@@ -1087,7 +1087,192 @@ class ErrorHandler:
 
 ## 📊 监控和可观测性
 
-### 1. **指标收集**
+AIOps Polaris 配备了完整的监控和可观测性体系，基于 **Prometheus + Grafana + 自定义指标服务** 实现全方位系统监控。
+
+### 1. **监控架构**
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   FastAPI App   │───▶│   Prometheus    │───▶│    Grafana      │
+│   + Metrics     │    │   (指标收集)     │    │   (可视化)      │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│ MetricsService  │    │  Time Series    │    │   Dashboards    │
+│  (指标暴露)     │    │     数据库      │    │    + Alerts     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### 2. **核心指标类别**
+
+#### HTTP请求指标
+- `aiops_http_requests_total`: 总HTTP请求计数 (按方法、端点、状态码分组)
+- `aiops_http_request_duration_seconds`: HTTP请求处理时长分布
+- `aiops_http_requests_in_progress`: 当前处理中的HTTP请求数
+
+#### Agent执行指标  
+- `aiops_agent_executions_total`: Agent执行总次数 (按类型、状态分组)
+- `aiops_agent_execution_duration_seconds`: Agent执行时长分布
+- `aiops_agent_active`: 当前活跃Agent数量
+
+#### 搜索服务指标
+- `aiops_search_requests_total`: 搜索请求总数 (按搜索类型、数据源分组)
+- `aiops_search_duration_seconds`: 搜索响应时长分布
+- `aiops_search_results_count`: 搜索结果数量分布
+
+#### 数据库指标
+- `aiops_database_connections`: 数据库连接数 (按数据库类型、状态分组)
+- `aiops_database_operations_total`: 数据库操作计数
+- `aiops_database_operation_duration_seconds`: 数据库操作耗时
+
+#### 业务指标
+- `aiops_user_sessions_total`: 用户会话创建总数
+- `aiops_active_sessions`: 当前活跃会话数
+- `aiops_messages_total`: 消息处理总数
+- `aiops_message_tokens`: 消息Token数量分布
+
+#### 系统资源指标
+- `aiops_cpu_usage_percent`: CPU使用率
+- `aiops_memory_usage_bytes`: 内存使用情况 (按类型分组)
+- `aiops_cache_hit_ratio`: 缓存命中率
+
+### 3. **指标收集实现**
+
+#### MetricsService 核心功能
+```python
+# 监控服务核心类
+class MetricsService:
+    def __init__(self):
+        self.registry = CollectorRegistry()
+        self._init_metrics()  # 初始化所有指标
+    
+    # HTTP请求装饰器
+    def track_http_request(self, endpoint: str)
+    
+    # Agent执行上下文管理器
+    @contextmanager
+    def track_agent_execution(self, agent_type: str)
+    
+    # 数据库操作跟踪
+    @contextmanager  
+    def track_database_operation(self, db_type: str, operation: str)
+    
+    # 指标导出（Prometheus格式）
+    def export_metrics(self) -> bytes
+```
+
+#### 自动指标收集
+- **HTTP中间件**: 自动跟踪所有API请求的响应时间和状态
+- **Agent装饰器**: 透明跟踪Agent执行性能和成功率
+- **数据库钩子**: 监控数据库连接池和查询性能
+- **系统资源**: 定时更新CPU、内存使用情况
+
+### 4. **Grafana仪表盘**
+
+#### AIOps Overview Dashboard
+- **系统概览**: HTTP请求率、响应时间、活跃连接
+- **Agent监控**: Agent执行统计、性能分析、错误追踪  
+- **搜索分析**: 搜索请求模式、响应时间、结果质量
+- **资源监控**: CPU、内存使用趋势
+- **数据库监控**: 连接池状态、查询性能
+
+#### 关键可视化组件
+- **实时指标卡片**: 当前活跃请求、Agent、会话数
+- **时间序列图表**: 请求率、响应时间、资源使用趋势
+- **直方图分析**: 响应时间分布、搜索结果数量分布
+- **状态热力图**: HTTP状态码分布、数据库操作状态
+
+### 5. **监控端点**
+
+#### `/metrics` - Prometheus指标导出
+```bash
+curl http://localhost:8888/metrics
+```
+返回标准Prometheus格式指标数据，包含系统实时状态。
+
+#### `/health` - 增强健康检查  
+```json
+{
+  "status": "healthy",
+  "components": {
+    "weaviate": {"status": "healthy"},
+    "neo4j": {"status": "healthy"}, 
+    "metrics": {"metrics_enabled": true, "registry_collectors": 15}
+  }
+}
+```
+
+### 6. **监控部署和使用**
+
+#### 快速启动监控栈
+```bash
+# 启动完整监控栈
+docker-compose up -d
+
+# 验证服务状态
+docker-compose ps
+
+# 运行监控集成测试
+python tests/test_monitoring_integration.py
+```
+
+#### 监控访问地址
+- **API服务**: http://localhost:8888
+- **API指标**: http://localhost:8888/metrics
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3000 (admin/aiops123)
+- **系统概览仪表盘**: http://localhost:3000/d/aiops-overview
+
+#### 关键监控查询示例
+```promql
+# HTTP请求率 (按端点分组)
+rate(aiops_http_requests_total[5m])
+
+# 95th分位数响应时间
+histogram_quantile(0.95, rate(aiops_http_request_duration_seconds_bucket[5m]))
+
+# 错误率
+rate(aiops_http_requests_total{status_code=~"5.."}[5m]) / rate(aiops_http_requests_total[5m])
+
+# Agent执行成功率
+rate(aiops_agent_executions_total{status="success"}[5m]) / rate(aiops_agent_executions_total[5m])
+
+# 搜索性能分析
+histogram_quantile(0.95, rate(aiops_search_duration_seconds_bucket[5m]))
+```
+
+#### 监控最佳实践
+1. **定期检查仪表盘**: 关注系统性能趋势和异常
+2. **设置告警规则**: 为关键指标配置Prometheus告警
+3. **性能基线**: 建立正常业务状态下的性能基线
+4. **容量规划**: 基于监控数据进行资源容量规划
+
+### 7. **故障排除和调试**
+
+#### 常见监控问题
+1. **指标数据缺失**
+   - 检查 `/metrics` 端点是否可访问
+   - 验证Prometheus配置和目标发现
+   - 确认MetricsService正确初始化
+
+2. **Grafana仪表盘空白**
+   - 检查Prometheus数据源连接
+   - 验证查询语句语法
+   - 确认时间范围设置
+
+3. **性能监控异常**
+   - 检查系统资源限制
+   - 分析日志中的错误信息
+   - 验证数据库连接状态
+
+#### 监控数据分析指南
+- **响应时间分析**: 关注95th/99th分位数，识别性能瓶颈
+- **错误率趋势**: 监控4xx/5xx错误模式，快速定位问题
+- **资源使用**: 跟踪CPU、内存趋势，预防资源耗尽
+- **业务指标**: 关注用户会话、消息处理等业务关键指标
+
+### 8. **指标收集详细实现**
 
 ```python
 class MetricsCollector:

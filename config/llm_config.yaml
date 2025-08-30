@@ -1,0 +1,37 @@
+# LLM配置文件
+llm_config:
+  # 当前使用的LLM类型: "openai", "claude", "local_vllm", "demo"
+  provider: "openai"  # 使用OpenAI在线API
+  
+  # 在线API配置
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-3.5-turbo"
+    max_tokens: 4096
+    temperature: 0.7
+    
+  claude:
+    api_key: "${ANTHROPIC_API_KEY}"
+    base_url: "https://api.anthropic.com"
+    model: "claude-3-haiku-20240307"
+    max_tokens: 4096
+    temperature: 0.7
+    
+  # 本地vLLM配置
+  local_vllm:
+    base_url: "http://vllm:8000/v1"
+    model: "Qwen/Qwen2.5-1.5B-Instruct" 
+    max_tokens: 4096
+    temperature: 0.7
+    
+  # 演示模式配置（简单回复）
+  demo:
+    enabled: true
+    default_response: "这是一个演示响应。完整的LLM功能正在开发中。"
+    
+  # 通用配置
+  general:
+    timeout: 30  # 请求超时时间（秒）
+    max_retries: 3  # 最大重试次数
+    retry_delay: 1  # 重试延迟（秒）

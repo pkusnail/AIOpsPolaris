@@ -1,8 +1,19 @@
-# AIOps Polaris - 智能运维系统
+# AIOps Polaris - 智能运维平台
 
-## 项目概述
+![AIOps Polaris](https://img.shields.io/badge/AIOps-Polaris-blue?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.11+-green?style=for-the-badge)
+![Docker](https://img.shields.io/badge/Docker-Ready-blue?style=for-the-badge)
 
-AIOps Polaris 是一个基于AI的智能运维系统，集成了RAG（检索增强生成）、混合搜索、知识图谱、向量数据库等先进技术，为运维团队提供智能化的故障诊断、根因分析和解决方案推荐。
+AIOps Polaris 是一个基于知识图谱和语义搜索的智能运维平台，整合了多种数据存储和处理技术来提供全面的运维支持。
+
+## ✨ 特性
+
+- 🤖 **智能对话**: 基于大语言模型的智能运维助手
+- 🕸️ **知识图谱**: Neo4j驱动的复杂关系建模
+- 🔍 **语义搜索**: Weaviate向量数据库支持的语义检索
+- 📊 **监控告警**: Prometheus + Grafana 完整监控方案
+- 🏗️ **微服务架构**: Docker Compose 一键部署
+- 📈 **可观测性**: 完整的监控指标和健康检查
 
 ## 系统架构
 
@@ -112,18 +123,28 @@ AIOps Polaris 是一个基于AI的智能运维系统，集成了RAG（检索增�
 
 ### 前置要求
 - Docker & Docker Compose (推荐最新版本)
-- Python 3.8+
-- 至少8GB内存
-- 至少10GB可用磁盘空间
-- NVIDIA GPU (可选，用于LLM加速)
+- Python 3.11+
+- 至少16GB内存 (GPU模型推理需要更多内存)
+- 至少20GB可用磁盘空间
+- **GPU环境 (用于vLLM模型推理)**:
+  - NVIDIA GPU (推荐RTX 3090或更高)
+  - CUDA 12.2+ 驱动
+  - NVIDIA Container Toolkit
+  - 至少12GB GPU显存 (用于Qwen2.5-7B模型)
 
 ### 一键启动
 
-我们提供了完全自动化的启动脚本，只需一个命令即可启动整个系统：
+**重要：在启动前，请先配置.env文件！**
 
 ```bash
+# 1. 首先配置API密钥（重要！）
+echo "OPENAI_API_KEY=sk-your-openai-api-key-here" > .env
+
+# 2. 然后启动系统
 ./scripts/start_services.sh
 ```
+
+我们提供了完全自动化的启动脚本，只需两个命令即可启动整个系统。
 
 这个脚本会自动：
 1. ✅ 检查所有依赖工具（Docker、Python等）
@@ -212,7 +233,30 @@ git clone <repository-url>
 cd AIOpsPolaris
 ```
 
-2. **启动基础服务**
+2. **配置环境变量（重要）**
+
+创建 `.env` 文件配置LLM API密钥：
+
+```bash
+# 创建.env文件
+echo "OPENAI_API_KEY=sk-your-openai-api-key-here" > .env
+echo "ANTHROPIC_API_KEY=sk-ant-your-claude-api-key-here" >> .env
+```
+
+或者手动创建 `.env` 文件：
+```env
+# OpenAI API密钥 (必需，用于智能对话功能)
+OPENAI_API_KEY=sk-your-openai-api-key-here
+
+# Claude API密钥 (可选)
+ANTHROPIC_API_KEY=sk-ant-your-claude-api-key-here
+```
+
+**注意**: 
+- 如果没有配置API密钥，系统会自动使用演示模式
+- 演示模式提供基本功能，但无法使用完整的AI对话能力
+
+3. **启动基础服务**
 ```bash
 docker-compose up -d mysql neo4j weaviate redis
 ```
