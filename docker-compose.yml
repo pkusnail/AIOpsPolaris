@@ -11,8 +11,7 @@ services:
       MYSQL_USER: aiops_user
       MYSQL_PASSWORD: aiops_pass
     ports:
-      - "3306:3306"
-    volumes:
+      - "3306:330    volumes:
       - mysql_data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
@@ -126,8 +125,7 @@ services:
       - --port
       - "8000"
       - --max-model-len
-      - "4096"
-      - --device
+      - "409      - --device
       - cpu
       - --enforce-eager
       - --tensor-parallel-size
