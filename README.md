@@ -168,6 +168,7 @@ python chat_cli.py
 
 | 文档 | 描述 | 链接 |
 |------|------|------|
+| 🏗️ **系统设计文档** | 架构设计、数据库设计、Agent设计 | [system-design.md](docs/system-design.md) |
 | 🎯 **系统交互流程** | 架构图、时序图、API交互流程 | [system-interaction-flow.md](docs/system-interaction-flow.md) |
 | 🖥️ **Web UI使用指南** | Web界面详细使用说明 | [web-ui-guide.md](docs/web-ui-guide.md) |
 | 📖 **API参考文档** | 完整的API接口文档 | [api-reference.md](docs/api-reference.md) |
