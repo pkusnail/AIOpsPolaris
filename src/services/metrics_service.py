@@ -177,6 +177,60 @@ class MetricsService:
             registry=self.registry
         )
         
+        # 服务状态指标
+        self.service_status = Gauge(
+            'aiops_service_status',
+            'Service status (1=healthy, 0=unhealthy)',
+            ['service'],
+            registry=self.registry
+        )
+        
+        # 数据库指标
+        self.database_connections_active = Gauge(
+            'aiops_database_connections_active',
+            'Active database connections',
+            ['database'],
+            registry=self.registry
+        )
+        
+        # LLM指标
+        self.llm_requests_total = Counter(
+            'aiops_llm_requests_total',
+            'Total LLM requests',
+            ['provider', 'status'],
+            registry=self.registry
+        )
+        
+        self.llm_request_duration = Histogram(
+            'aiops_llm_request_duration_seconds',
+            'LLM request duration in seconds',
+            ['provider'],
+            registry=self.registry
+        )
+        
+        self.llm_tokens_total = Counter(
+            'aiops_llm_tokens_total',
+            'Total LLM tokens processed',
+            ['provider', 'type'],
+            registry=self.registry
+        )
+        
+        # API错误指标
+        self.api_errors_total = Counter(
+            'aiops_api_errors_total',
+            'Total API errors',
+            ['endpoint', 'error_type'],
+            registry=self.registry
+        )
+        
+        # 磁盘指标
+        self.disk_usage_bytes = Gauge(
+            'aiops_disk_usage_bytes',
+            'Disk usage in bytes',
+            ['disk_type'],
+            registry=self.registry
+        )
+        
         self.cache_hit_ratio = Gauge(
             'aiops_cache_hit_ratio',
             'Cache hit ratio',
@@ -360,15 +414,58 @@ class MetricsService:
         ).observe(token_count)
     
     # 系统资源监控
-    def update_system_resources(self, memory_usage: Dict[str, int], 
-                              cpu_usage: float):
+    def update_system_resources(self, memory_usage: Dict[str, int] = None, 
+                              cpu_usage: float = None):
         """更新系统资源使用情况"""
-        for memory_type, usage in memory_usage.items():
-            self.memory_usage_bytes.labels(
-                memory_type=memory_type
-            ).set(usage)
+        try:
+            import psutil
+            
+            # 获取CPU使用率
+            if cpu_usage is None:
+                cpu_usage = psutil.cpu_percent(interval=0.1)
+            self.cpu_usage_percent.set(cpu_usage)
+            
+            # 获取内存使用情况
+            if memory_usage is None:
+                memory = psutil.virtual_memory()
+                memory_usage = {
+                    'total': memory.total,
+                    'used': memory.used,
+                    'available': memory.available,
+                    'free': memory.free
+                }
+            
+            for memory_type, usage in memory_usage.items():
+                self.memory_usage_bytes.labels(
+                    memory_type=memory_type
+                ).set(usage)
+                
+            # 获取磁盘使用情况
+            disk = psutil.disk_usage('/')
+            self.disk_usage_bytes.labels(disk_type='total').set(disk.total)
+            self.disk_usage_bytes.labels(disk_type='used').set(disk.used)
+            self.disk_usage_bytes.labels(disk_type='free').set(disk.free)
+            
+        except Exception as e:
+            logger.error(f"Failed to update system resources: {e}")
+
+    def update_service_status(self, service: str, is_healthy: bool):
+        """更新服务状态"""
+        self.service_status.labels(service=service).set(1 if is_healthy else 0)
         
-        self.cpu_usage_percent.set(cpu_usage)
+    def record_llm_request(self, provider: str, duration: float, status: str = 'success', input_tokens: int = 0, output_tokens: int = 0):
+        """记录LLM请求"""
+        self.llm_requests_total.labels(provider=provider, status=status).inc()
+        self.llm_request_duration.labels(provider=provider).observe(duration)
+        
+        if input_tokens > 0:
+            self.llm_tokens_total.labels(provider=provider, type='input').inc(input_tokens)
+        if output_tokens > 0:
+            self.llm_tokens_total.labels(provider=provider, type='output').inc(output_tokens)
+            
+    def record_api_error(self, endpoint: str, error_type: str):
+        """记录API错误"""
+        self.api_errors_total.labels(endpoint=endpoint, error_type=error_type).inc()
     
     # 缓存操作跟踪
     def record_cache_operation(self, cache_type: str, operation: str, 

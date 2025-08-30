@@ -1,0 +1,326 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "AIOps Polaris 综合监控仪表盘",
+    "tags": ["aiops", "monitoring"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "系统状态概览",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(aiops_service_status)",
+            "refId": "A",
+            "legendFormat": "健康服务数"
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          },
+          "textMode": "auto",
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 2},
+                {"color": "green", "value": 4}
+              ]
+            },
+            "unit": "short"
+          }
+        }
+      },
+      
+      {
+        "id": 2,
+        "title": "CPU 使用率",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "aiops_cpu_usage_percent",
+            "refId": "A",
+            "legendFormat": "CPU 使用率 (%)"
+          }
+        ],
+        "yAxes": [
+          {"min": 0, "max": 100, "unit": "percent"},
+          {"show": false}
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "nullPointMode": "null",
+        "tooltip": {"shared": true, "sort": 0, "value_type": "individual"}
+      },
+      
+      {
+        "id": 3,
+        "title": "内存使用情况",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "aiops_memory_usage_bytes{memory_type=\"used\"}",
+            "refId": "A",
+            "legendFormat": "已使用内存"
+          },
+          {
+            "expr": "aiops_memory_usage_bytes{memory_type=\"available\"}",
+            "refId": "B",
+            "legendFormat": "可用内存"
+          }
+        ],
+        "yAxes": [
+          {"min": 0, "unit": "bytes"},
+          {"show": false}
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "nullPointMode": "null",
+        "tooltip": {"shared": true, "sort": 0, "value_type": "individual"}
+      },
+      
+      {
+        "id": 4,
+        "title": "API 请求统计",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(aiops_http_requests_total[5m])",
+            "refId": "A",
+            "legendFormat": "{{endpoint}} - {{status_code}}"
+          }
+        ],
+        "yAxes": [
+          {"min": 0, "unit": "reqps"},
+          {"show": false}
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "nullPointMode": "null",
+        "tooltip": {"shared": true, "sort": 0, "value_type": "individual"}
+      },
+      
+      {
+        "id": 5,
+        "title": "LLM 请求统计",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(aiops_llm_requests_total[5m])",
+            "refId": "A",
+            "legendFormat": "{{provider}} - {{status}}"
+          }
+        ],
+        "yAxes": [
+          {"min": 0, "unit": "reqps"},
+          {"show": false}
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "nullPointMode": "null",
+        "tooltip": {"shared": true, "sort": 0, "value_type": "individual"}
+      },
+      
+      {
+        "id": 6,
+        "title": "服务状态",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "aiops_service_status",
+            "refId": "A",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          },
+          "textMode": "auto",
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            },
+            "mappings": [
+              {"type": "value", "value": "0", "text": "Down"},
+              {"type": "value", "value": "1", "text": "Up"}
+            ]
+          }
+        }
+      },
+      
+      {
+        "id": 7,
+        "title": "磁盘使用情况",
+        "type": "piechart",
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 20},
+        "targets": [
+          {
+            "expr": "aiops_disk_usage_bytes{disk_type=\"used\"}",
+            "refId": "A",
+            "legendFormat": "已使用"
+          },
+          {
+            "expr": "aiops_disk_usage_bytes{disk_type=\"free\"}",
+            "refId": "B",
+            "legendFormat": "可用空间"
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          },
+          "pieType": "pie",
+          "tooltip": {"mode": "single"},
+          "legend": {
+            "displayMode": "visible",
+            "placement": "right"
+          }
+        }
+      },
+      
+      {
+        "id": 8,
+        "title": "LLM 响应时间",
+        "type": "graph",
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 20},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(aiops_llm_request_duration_seconds_bucket[5m])) by (le, provider))",
+            "refId": "A",
+            "legendFormat": "{{provider}} - 95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(aiops_llm_request_duration_seconds_bucket[5m])) by (le, provider))",
+            "refId": "B",
+            "legendFormat": "{{provider}} - 50th percentile"
+          }
+        ],
+        "yAxes": [
+          {"min": 0, "unit": "s"},
+          {"show": false}
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "nullPointMode": "null",
+        "tooltip": {"shared": true, "sort": 0, "value_type": "individual"}
+      },
+      
+      {
+        "id": 9,
+        "title": "API 错误统计",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 26},
+        "targets": [
+          {
+            "expr": "sum by (endpoint, error_type) (increase(aiops_api_errors_total[1h]))",
+            "refId": "A",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true, "__name__": true, "job": true, "instance": true}
+            }
+          }
+        ],
+        "options": {
+          "showHeader": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "width": 100
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Value"},
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "错误次数"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      
+      {
+        "id": 10,
+        "title": "Token 使用统计",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 26},
+        "targets": [
+          {
+            "expr": "rate(aiops_llm_tokens_total[5m])",
+            "refId": "A",
+            "legendFormat": "{{provider}} - {{type}} tokens/sec"
+          }
+        ],
+        "yAxes": [
+          {"min": 0, "unit": "short"},
+          {"show": false}
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "nullPointMode": "null",
+        "tooltip": {"shared": true, "sort": 0, "value_type": "individual"}
+      }
+    ],
+    
+    "templating": {
+      "list": []
+    },
+    
+    "annotations": {
+      "list": []
+    },
+    
+    "schemaVersion": 30,
+    "version": 1,
+    "links": []
+  }
+}

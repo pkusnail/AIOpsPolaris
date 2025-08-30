@@ -160,6 +160,16 @@ async def metrics_endpoint(metrics_svc: MetricsService = Depends(get_metrics_ser
     """Prometheus指标导出端点"""
     try:
         metrics_svc.increment_counter("api_requests_total", {"endpoint": "/metrics"})
+        
+        # 更新系统资源指标
+        metrics_svc.update_system_resources()
+        
+        # 更新服务状态
+        metrics_svc.update_service_status("database", database_service is not None)
+        metrics_svc.update_service_status("embedding", embedding_service is not None)
+        metrics_svc.update_service_status("aiops_graph", aiops_graph is not None)
+        metrics_svc.update_service_status("llm", llm_adapter is not None)
+        
         return PlainTextResponse(
             content=metrics_svc.get_prometheus_metrics(),
             media_type=metrics_svc.get_content_type()
@@ -263,6 +273,9 @@ async def chat(
     metrics_svc: MetricsService = Depends(get_metrics_service_dep)
 ):
     """智能聊天端点 - 使用LLM适配器"""
+    start_time = datetime.now()
+    provider_name = "unknown"
+    
     try:
         metrics_svc.increment_counter("api_requests_total", {"endpoint": "/chat"})
         
@@ -273,17 +286,43 @@ async def chat(
                 detail="Message is required"
             )
         
+        # 获取提供商信息
+        provider_info = llm.get_provider_info()
+        provider_name = provider_info.get("provider", "unknown")
+        
         # 使用LLM适配器处理查询
         response = await llm.generate_response(query)
+        
+        # 记录成功的LLM请求
+        duration = (datetime.now() - start_time).total_seconds()
+        metrics_svc.record_llm_request(
+            provider=provider_name,
+            duration=duration,
+            status="success",
+            input_tokens=len(query.split()),  # 简单估算
+            output_tokens=len(response.split()) if response else 0
+        )
         
         return {
             "response": response,
             "timestamp": datetime.now(),
             "session_id": request.get("session_id", "demo-session"),
-            "llm_provider": llm.get_provider_info().get("provider", "unknown")
+            "llm_provider": provider_name
         }
         
     except Exception as e:
+        # 记录失败的LLM请求
+        duration = (datetime.now() - start_time).total_seconds()
+        metrics_svc.record_llm_request(
+            provider=provider_name,
+            duration=duration,
+            status="error"
+        )
+        
+        # 记录API错误
+        error_type = type(e).__name__
+        metrics_svc.record_api_error("/chat", error_type)
+        
         logger.error(f"Chat failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
