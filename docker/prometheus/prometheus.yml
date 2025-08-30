@@ -56,62 +56,8 @@ scrape_configs:
         target_label: service_type
         replacement: 'visualization'
 
-  # Redis监控 (通过redis_exporter)
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis:6379']
-    scrape_interval: 30s
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: service_name
-        replacement: 'aiops-redis'
-      - source_labels: [__address__]
-        target_label: service_type
-        replacement: 'cache-database'
-
-  # MySQL监控 (通过mysqld_exporter)
-  - job_name: 'mysql'
-    static_configs:
-      - targets: ['mysql:3306']
-    scrape_interval: 30s
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: service_name
-        replacement: 'aiops-mysql'
-      - source_labels: [__address__]
-        target_label: service_type
-        replacement: 'relational-database'
-
-  # Weaviate监控
-  - job_name: 'weaviate'
-    static_configs:
-      - targets: ['weaviate:8080']
-    metrics_path: '/metrics'
-    scrape_interval: 30s
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: service_name
-        replacement: 'aiops-weaviate'
-      - source_labels: [__address__]
-        target_label: service_type
-        replacement: 'vector-database'
-
-  # Neo4j监控
-  - job_name: 'neo4j'
-    static_configs:
-      - targets: ['neo4j:7474']
-    metrics_path: '/metrics'
-    scrape_interval: 30s
-    basic_auth:
-      username: 'neo4j'
-      password: 'aiops123'
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: service_name
-        replacement: 'aiops-neo4j'
-      - source_labels: [__address__]
-        target_label: service_type
-        replacement: 'graph-database'
+  # 注意: Redis、MySQL、Weaviate、Neo4j 没有原生/metrics端点
+  # 这些服务通过cAdvisor在容器级别进行监控，提供CPU、内存、网络、磁盘I/O指标
 
 alerting:
   alertmanagers:
