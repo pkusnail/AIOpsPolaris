@@ -3,7 +3,6 @@
 # Web框架
 fastapi
 uvicorn[standard]
-gradio
 
 # 数据库
 sqlalchemy
