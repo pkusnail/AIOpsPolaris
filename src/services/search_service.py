@@ -136,13 +136,18 @@ class SearchService:
                 else:
                     score = 0.0
                 
+                # 现在Weaviate直接存储完整文档信息
+                doc_id = item.get("id", "")  # Weaviate内部ID
                 results.append({
-                    "id": item.get("mysql_id", ""),
+                    "id": doc_id,
                     "title": item.get("title", ""),
                     "content": item.get("content", "")[:500] + "..." if len(item.get("content", "")) > 500 else item.get("content", ""),
                     "source": item.get("source", ""),
                     "category": item.get("category"),
                     "tags": item.get("tags", []),
+                    "author": item.get("author", ""),
+                    "version": item.get("version", ""),
+                    "created_at": item.get("created_at", ""),
                     "score": score,
                     "search_type": "vector",
                     "highlight": self._generate_highlight(item.get("content", ""), query)
@@ -161,29 +166,63 @@ class SearchService:
         category: Optional[str] = None,
         limit: int = 10
     ) -> List[Dict[str, Any]]:
-        """关键词搜索（基于MySQL全文索引）"""
+        """关键词搜索（基于Weaviate的BM25搜索）"""
         try:
-            # 使用数据库服务进行全文搜索
-            documents = await self.database_service.search_knowledge_documents(
+            # 构建过滤条件
+            where_filter = None
+            if source or category:
+                conditions = []
+                if source:
+                    conditions.append({
+                        "path": ["source"],
+                        "operator": "Equal",
+                        "valueText": source
+                    })
+                if category:
+                    conditions.append({
+                        "path": ["category"],
+                        "operator": "Equal", 
+                        "valueText": category
+                    })
+                
+                if len(conditions) > 1:
+                    where_filter = {
+                        "operator": "And",
+                        "operands": conditions
+                    }
+                else:
+                    where_filter = conditions[0]
+            
+            # 使用Weaviate的BM25搜索
+            weaviate_results = await self.vector_service.keyword_search(
                 query=query,
-                source=source,
-                category=category,
-                limit=limit
+                class_name="KnowledgeDocument",
+                limit=limit,
+                where_filter=where_filter
             )
             
             # 转换结果格式
             results = []
-            for doc in documents:
+            for item in weaviate_results:
+                if "_additional" in item:
+                    score = item["_additional"].get("score", 0.0)
+                else:
+                    score = 0.8
+                
+                doc_id = item.get("id", "")  # Weaviate内部ID
                 results.append({
-                    "id": doc.id,
-                    "title": doc.title,
-                    "content": doc.content[:500] + "..." if len(doc.content) > 500 else doc.content,
-                    "source": doc.source,
-                    "category": doc.category,
-                    "tags": doc.tags or [],
-                    "score": 0.8,  # MySQL全文搜索没有标准化评分
+                    "id": doc_id,
+                    "title": item.get("title", ""),
+                    "content": item.get("content", "")[:500] + "..." if len(item.get("content", "")) > 500 else item.get("content", ""),
+                    "source": item.get("source", ""),
+                    "category": item.get("category"),
+                    "tags": item.get("tags", []),
+                    "author": item.get("author", ""),
+                    "version": item.get("version", ""),
+                    "created_at": item.get("created_at", ""),
+                    "score": score,
                     "search_type": "keyword",
-                    "highlight": self._generate_highlight(doc.content, query)
+                    "highlight": self._generate_highlight(item.get("content", ""), query)
                 })
             
             return results
@@ -205,10 +244,10 @@ class SearchService:
             related_entities = await self._find_query_entities(query)
             
             for entity in related_entities[:limit]:
-                # 查找与实体相关的文档
+                # 查找与实体相关的文档（通过Neo4j获取Weaviate ID）
                 cypher_query = """
-                MATCH (e:Entity {name: $entity_name})<-[:MENTIONS]-(d:Document)
-                RETURN d.mysql_id as doc_id, d.title as title, d.content as content,
+                MATCH (e:Entity {name: $entity_name})-[:MENTIONED_IN]->(d:Document)
+                RETURN d.weaviate_id as weaviate_id, d.title as title, 
                        d.source as source, d.category as category
                 LIMIT 3
                 """
@@ -218,19 +257,29 @@ class SearchService:
                     {"entity_name": entity["name"]}
                 )
                 
-                for result in graph_results:
-                    results.append({
-                        "id": result.get("doc_id", ""),
-                        "title": result.get("title", ""),
-                        "content": result.get("content", "")[:500] + "..." if result.get("content") and len(result.get("content")) > 500 else result.get("content", ""),
-                        "source": result.get("source", ""),
-                        "category": result.get("category"),
-                        "tags": [],
-                        "score": 0.7,
-                        "search_type": "graph",
-                        "related_entity": entity["name"],
-                        "entity_type": entity["type"]
-                    })
+                # 通过Weaviate ID获取完整文档信息
+                for graph_result in graph_results:
+                    weaviate_id = graph_result.get("weaviate_id")
+                    if weaviate_id:
+                        # 从Weaviate获取完整文档内容
+                        doc_obj = await self.vector_service.get_object_by_id(weaviate_id)
+                        if doc_obj and "properties" in doc_obj:
+                            doc_props = doc_obj["properties"]
+                            results.append({
+                                "id": weaviate_id,
+                                "title": doc_props.get("title", ""),
+                                "content": doc_props.get("content", "")[:500] + "..." if len(doc_props.get("content", "")) > 500 else doc_props.get("content", ""),
+                                "source": doc_props.get("source", ""),
+                                "category": doc_props.get("category"),
+                                "tags": doc_props.get("tags", []),
+                                "author": doc_props.get("author", ""),
+                                "version": doc_props.get("version", ""),
+                                "created_at": doc_props.get("created_at", ""),
+                                "score": 0.7,
+                                "search_type": "graph",
+                                "related_entity": entity["name"],
+                                "entity_type": entity["type"]
+                            })
             
             return results
             

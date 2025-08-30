@@ -14,38 +14,43 @@ import uuid
 
 
 class KnowledgeDocument(Base):
-    """知识库文档表"""
+    """知识库文档表 - 仅用于业务关联和统计，实际文档存储在Weaviate"""
     __tablename__ = "knowledge_documents"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    weaviate_id = Column(String(100), nullable=False, unique=True, index=True)  # Weaviate文档ID
     title = Column(String(500), nullable=False)
-    content = Column(Text, nullable=False)
     source = Column(ENUM("wiki", "gitlab", "jira", "logs"), nullable=False, index=True)
     source_id = Column(String(100), nullable=True)
     category = Column(String(100), nullable=True, index=True)
-    tags = Column(JSON, nullable=True)
-    embedding_id = Column(String(100), nullable=True)  # Weaviate中的ID
     created_at = Column(DateTime, default=func.now(), index=True)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    # 业务统计字段
+    view_count = Column(Integer, default=0)
+    last_accessed = Column(DateTime, nullable=True)
 
-    # 创建全文索引
+    # 创建索引
     __table_args__ = (
-        Index('idx_title_content', 'title', 'content', mysql_prefix='FULLTEXT'),
+        Index('idx_source_category', 'source', 'category'),
+        Index('idx_created_at', 'created_at'),
     )
 
 
 class Entity(Base):
-    """实体表"""
+    """实体表 - 仅用于业务统计和快速查找，实际图数据存储在Neo4j"""
     __tablename__ = "entities"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(200), nullable=False)
     entity_type = Column(String(100), nullable=False, index=True)
-    description = Column(Text, nullable=True)
-    properties = Column(JSON, nullable=True)
-    neo4j_id = Column(BigInteger, nullable=True, index=True)
+    source_document_id = Column(String(100), nullable=True)  # 来源文档（Weaviate ID）
+    confidence = Column(Float, default=1.0)  # NER提取置信度
     created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    # 业务统计字段
+    mention_count = Column(Integer, default=1)  # 被提及次数
+    last_mentioned = Column(DateTime, default=func.now())
 
     # 关联关系
     source_relationships = relationship("Relationship", foreign_keys="Relationship.source_entity_id", 
@@ -56,11 +61,12 @@ class Entity(Base):
     # 唯一约束
     __table_args__ = (
         Index('unique_name_type', 'name', 'entity_type', unique=True),
+        Index('idx_type_confidence', 'entity_type', 'confidence'),
     )
 
 
 class Relationship(Base):
-    """关系表"""
+    """关系表 - 仅用于业务统计，实际关系存储在Neo4j"""
     __tablename__ = "relationships"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -69,10 +75,13 @@ class Relationship(Base):
     target_entity_id = Column(String(36), ForeignKey("entities.id", ondelete="CASCADE"),
                             nullable=False, index=True)
     relationship_type = Column(String(100), nullable=False, index=True)
-    properties = Column(JSON, nullable=True)
     confidence = Column(Float, default=1.0)
-    neo4j_id = Column(BigInteger, nullable=True)
+    source_document_id = Column(String(100), nullable=True)  # 来源文档（Weaviate ID）
     created_at = Column(DateTime, default=func.now())
+    
+    # 业务统计字段
+    usage_count = Column(Integer, default=1)  # 被使用次数
+    last_used = Column(DateTime, default=func.now())
 
     # 关联实体
     source_entity = relationship("Entity", foreign_keys=[source_entity_id], 

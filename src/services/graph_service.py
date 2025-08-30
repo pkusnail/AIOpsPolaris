@@ -56,7 +56,7 @@ class GraphService:
             "CREATE CONSTRAINT service_name IF NOT EXISTS FOR (s:Service) REQUIRE s.name IS UNIQUE",
             "CREATE CONSTRAINT component_name IF NOT EXISTS FOR (c:Component) REQUIRE c.name IS UNIQUE",
             "CREATE CONSTRAINT error_code IF NOT EXISTS FOR (e:Error) REQUIRE e.code IS UNIQUE",
-            "CREATE CONSTRAINT document_id IF NOT EXISTS FOR (d:Document) REQUIRE d.mysql_id IS UNIQUE"
+            "CREATE CONSTRAINT document_id IF NOT EXISTS FOR (d:Document) REQUIRE d.weaviate_id IS UNIQUE"
         ]
         
         indexes = [
@@ -93,18 +93,20 @@ class GraphService:
         name: str,
         entity_type: str,
         properties: Optional[Dict[str, Any]] = None,
-        mysql_id: Optional[str] = None
+        source_document_id: Optional[str] = None,
+        confidence: float = 1.0
     ) -> int:
-        """创建实体节点"""
+        """创建实体节点 - Neo4j作为实体和关系的主存储"""
         try:
             entity_props = {
                 "name": name,
                 "type": entity_type,
+                "confidence": confidence,
                 "created_at": datetime.utcnow().isoformat()
             }
             
-            if mysql_id:
-                entity_props["mysql_id"] = mysql_id
+            if source_document_id:
+                entity_props["source_document_id"] = source_document_id
             
             if properties:
                 entity_props.update(properties)
@@ -187,6 +189,80 @@ class GraphService:
         except Exception as e:
             self.logger.error(f"Failed to create relationship: {e}")
             raise
+    
+    async def create_document_node(
+        self,
+        weaviate_id: str,
+        title: str,
+        source: str,
+        category: Optional[str] = None
+    ) -> int:
+        """创建文档节点并关联到Weaviate"""
+        try:
+            doc_props = {
+                "weaviate_id": weaviate_id,
+                "title": title,
+                "source": source,
+                "category": category or "未分类",
+                "created_at": datetime.utcnow().isoformat()
+            }
+            
+            query = """
+            MERGE (d:Document {weaviate_id: $weaviate_id})
+            ON CREATE SET d += $props
+            ON MATCH SET d += $props, d.updated_at = $updated_at
+            RETURN id(d) as node_id
+            """
+            
+            async with self.driver.session() as session:
+                result = await session.run(query, {
+                    "weaviate_id": weaviate_id,
+                    "props": doc_props,
+                    "updated_at": datetime.utcnow().isoformat()
+                })
+                
+                record = await result.single()
+                node_id = record["node_id"]
+                
+                self.logger.info(f"Created/updated document node for Weaviate ID: {weaviate_id}")
+                return node_id
+                
+        except Exception as e:
+            self.logger.error(f"Failed to create document node: {e}")
+            raise
+    
+    async def link_entity_to_document(
+        self,
+        entity_name: str,
+        entity_type: str,
+        weaviate_id: str,
+        relationship_type: str = "MENTIONED_IN"
+    ) -> bool:
+        """将实体链接到文档"""
+        try:
+            query = """
+            MATCH (e:Entity {name: $entity_name, type: $entity_type})
+            MATCH (d:Document {weaviate_id: $weaviate_id})
+            MERGE (e)-[r:MENTIONED_IN]->(d)
+            ON CREATE SET r.created_at = $created_at, r.type = $relationship_type
+            RETURN r
+            """
+            
+            async with self.driver.session() as session:
+                result = await session.run(query, {
+                    "entity_name": entity_name,
+                    "entity_type": entity_type,
+                    "weaviate_id": weaviate_id,
+                    "relationship_type": relationship_type,
+                    "created_at": datetime.utcnow().isoformat()
+                })
+                
+                record = await result.single()
+                return record is not None
+                
+        except Exception as e:
+            self.logger.error(f"Failed to link entity to document: {e}")
+            return False
     
     async def find_entities(
         self,

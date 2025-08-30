@@ -179,28 +179,24 @@ class DatabaseService:
                 self.logger.error(f"获取会话消息失败: {e}")
                 return [], 0
 
-    # 知识文档相关方法
+    # 知识文档相关方法 - 仅存储业务统计信息，实际文档存储在Weaviate
     async def save_knowledge_document(
         self,
+        weaviate_id: str,
         title: str,
-        content: str,
         source: str,
         source_id: Optional[str] = None,
-        category: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        embedding_id: Optional[str] = None
+        category: Optional[str] = None
     ) -> KnowledgeDocument:
-        """保存知识文档"""
+        """保存知识文档元数据和统计信息"""
         async for db in get_database():
             try:
                 new_doc = KnowledgeDocument(
+                    weaviate_id=weaviate_id,
                     title=title,
-                    content=content,
                     source=source,
                     source_id=source_id,
-                    category=category,
-                    tags=tags,
-                    embedding_id=embedding_id
+                    category=category
                 )
                 db.add(new_doc)
                 await db.flush()
@@ -211,61 +207,104 @@ class DatabaseService:
                 await db.rollback()
                 raise
 
-    async def search_knowledge_documents(
+    async def get_knowledge_document_by_weaviate_id(
         self,
-        query: str,
+        weaviate_id: str
+    ) -> Optional[KnowledgeDocument]:
+        """通过Weaviate ID获取知识文档记录"""
+        async for db in get_database():
+            try:
+                stmt = select(KnowledgeDocument).where(
+                    KnowledgeDocument.weaviate_id == weaviate_id
+                )
+                result = await db.execute(stmt)
+                return result.scalar_one_or_none()
+            except Exception as e:
+                self.logger.error(f"通过Weaviate ID获取文档失败: {e}")
+                return None
+    
+    async def update_document_stats(
+        self,
+        weaviate_id: str,
+        increment_views: bool = True
+    ) -> bool:
+        """更新文档统计信息"""
+        async for db in get_database():
+            try:
+                stmt = select(KnowledgeDocument).where(
+                    KnowledgeDocument.weaviate_id == weaviate_id
+                )
+                result = await db.execute(stmt)
+                doc = result.scalar_one_or_none()
+                
+                if doc and increment_views:
+                    doc.view_count += 1
+                    doc.last_accessed = datetime.utcnow()
+                    await db.commit()
+                    return True
+                return False
+            except Exception as e:
+                self.logger.error(f"更新文档统计失败: {e}")
+                return False
+    
+    async def get_document_stats(
+        self,
         source: Optional[str] = None,
-        category: Optional[str] = None,
-        limit: int = 10
-    ) -> List[KnowledgeDocument]:
-        """搜索知识文档"""
+        category: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """获取文档统计信息"""
         async for db in get_database():
             try:
                 conditions = []
-                
-                # 全文搜索条件
-                if query:
-                    conditions.append(
-                        text("MATCH(title, content) AGAINST(:query IN NATURAL LANGUAGE MODE) > 0")
-                    )
-                
                 if source:
                     conditions.append(KnowledgeDocument.source == source)
-                
                 if category:
                     conditions.append(KnowledgeDocument.category == category)
                 
-                if not conditions:
-                    conditions.append(text("1=1"))
+                if conditions:
+                    where_clause = and_(*conditions)
+                else:
+                    where_clause = text("1=1")
                 
-                stmt = (
-                    select(
-                        KnowledgeDocument,
-                        text("MATCH(title, content) AGAINST(:query IN NATURAL LANGUAGE MODE) as relevance_score")
-                    )
-                    .where(and_(*conditions))
-                    .order_by(text("relevance_score DESC"))
-                    .limit(limit)
-                )
+                # 总数统计
+                count_stmt = select(func.count(KnowledgeDocument.id)).where(where_clause)
+                total_result = await db.execute(count_stmt)
+                total_count = total_result.scalar()
                 
-                result = await db.execute(stmt, {"query": query})
-                documents = [row[0] for row in result.all()]
+                # 按源分组统计
+                source_stmt = select(
+                    KnowledgeDocument.source,
+                    func.count(KnowledgeDocument.id).label('count')
+                ).group_by(KnowledgeDocument.source)
+                source_result = await db.execute(source_stmt)
+                source_stats = {row.source: row.count for row in source_result.all()}
                 
-                return documents
+                # 按分类统计
+                category_stmt = select(
+                    KnowledgeDocument.category,
+                    func.count(KnowledgeDocument.id).label('count')
+                ).group_by(KnowledgeDocument.category)
+                category_result = await db.execute(category_stmt)
+                category_stats = {row.category: row.count for row in category_result.all()}
+                
+                return {
+                    "total_documents": total_count,
+                    "by_source": source_stats,
+                    "by_category": category_stats
+                }
             except Exception as e:
-                self.logger.error(f"搜索知识文档失败: {e}")
-                return []
+                self.logger.error(f"获取文档统计失败: {e}")
+                return {"total_documents": 0, "by_source": {}, "by_category": {}}
 
-    # 实体相关方法
+    # 实体相关方法 - 仅存储业务统计信息，实际实体存储在Neo4j
     async def save_entity(
         self,
         name: str,
         entity_type: str,
-        description: Optional[str] = None,
-        properties: Optional[Dict[str, Any]] = None,
-        neo4j_id: Optional[int] = None
+        source_document_id: Optional[str] = None,
+        confidence: float = 1.0
     ) -> Entity:
-        """保存实体"""
+        """保存实体统计信息 - 实际实体存储在Neo4j"""
         async for db in get_database():
             try:
                 # 检查是否已存在
@@ -276,35 +315,36 @@ class DatabaseService:
                 existing_entity = existing_result.scalar_one_or_none()
                 
                 if existing_entity:
-                    # 更新现有实体
+                    # 更新现有实体统计
                     stmt = (
                         update(Entity)
                         .where(Entity.id == existing_entity.id)
                         .values(
-                            description=description,
-                            properties=properties,
-                            neo4j_id=neo4j_id,
-                            updated_at=datetime.utcnow()
+                            mention_count=Entity.mention_count + 1,
+                            last_mentioned=datetime.utcnow(),
+                            confidence=confidence
                         )
                     )
                     await db.execute(stmt)
+                    await db.commit()
                     await db.refresh(existing_entity)
                     return existing_entity
                 else:
-                    # 创建新实体
+                    # 创建新实体统计记录
                     new_entity = Entity(
                         name=name,
                         entity_type=entity_type,
-                        description=description,
-                        properties=properties or {},
-                        neo4j_id=neo4j_id
+                        source_document_id=source_document_id,
+                        confidence=confidence,
+                        mention_count=1,
+                        last_mentioned=datetime.utcnow()
                     )
                     db.add(new_entity)
-                    await db.flush()
+                    await db.commit()
                     await db.refresh(new_entity)
                     return new_entity
             except Exception as e:
-                self.logger.error(f"保存实体失败: {e}")
+                self.logger.error(f"保存实体统计失败: {e}")
                 await db.rollback()
                 raise
 
@@ -313,7 +353,7 @@ class DatabaseService:
         entity_type: Optional[str] = None,
         limit: int = 100
     ) -> List[Entity]:
-        """获取实体列表"""
+        """获取实体统计列表 - 按提及次数排序"""
         async for db in get_database():
             try:
                 conditions = []
@@ -321,45 +361,173 @@ class DatabaseService:
                     conditions.append(Entity.entity_type == entity_type)
                 
                 if conditions:
-                    stmt = select(Entity).where(and_(*conditions)).limit(limit)
+                    stmt = (
+                        select(Entity)
+                        .where(and_(*conditions))
+                        .order_by(Entity.mention_count.desc(), Entity.last_mentioned.desc())
+                        .limit(limit)
+                    )
                 else:
-                    stmt = select(Entity).limit(limit)
+                    stmt = (
+                        select(Entity)
+                        .order_by(Entity.mention_count.desc(), Entity.last_mentioned.desc())
+                        .limit(limit)
+                    )
                 
                 result = await db.execute(stmt)
                 return list(result.scalars().all())
             except Exception as e:
-                self.logger.error(f"获取实体列表失败: {e}")
+                self.logger.error(f"获取实体统计列表失败: {e}")
                 return []
 
-    # 关系相关方法
+    # 关系相关方法 - 仅存储业务统计信息，实际关系存储在Neo4j
     async def save_relationship(
         self,
         source_entity_id: str,
         target_entity_id: str,
         relationship_type: str,
-        properties: Optional[Dict[str, Any]] = None,
-        confidence: float = 1.0,
-        neo4j_id: Optional[int] = None
+        source_document_id: Optional[str] = None,
+        confidence: float = 1.0
     ) -> Relationship:
-        """保存关系"""
+        """保存关系统计信息 - 实际关系存储在Neo4j"""
         async for db in get_database():
             try:
-                new_relationship = Relationship(
-                    source_entity_id=source_entity_id,
-                    target_entity_id=target_entity_id,
-                    relationship_type=relationship_type,
-                    properties=properties or {},
-                    confidence=confidence,
-                    neo4j_id=neo4j_id
+                # 检查是否已存在相同关系
+                existing_stmt = select(Relationship).where(
+                    and_(
+                        Relationship.source_entity_id == source_entity_id,
+                        Relationship.target_entity_id == target_entity_id,
+                        Relationship.relationship_type == relationship_type
+                    )
                 )
-                db.add(new_relationship)
-                await db.flush()
-                await db.refresh(new_relationship)
-                return new_relationship
+                existing_result = await db.execute(existing_stmt)
+                existing_rel = existing_result.scalar_one_or_none()
+                
+                if existing_rel:
+                    # 更新现有关系统计
+                    stmt = (
+                        update(Relationship)
+                        .where(Relationship.id == existing_rel.id)
+                        .values(
+                            usage_count=Relationship.usage_count + 1,
+                            last_used=datetime.utcnow(),
+                            confidence=confidence
+                        )
+                    )
+                    await db.execute(stmt)
+                    await db.commit()
+                    await db.refresh(existing_rel)
+                    return existing_rel
+                else:
+                    # 创建新关系统计记录
+                    new_relationship = Relationship(
+                        source_entity_id=source_entity_id,
+                        target_entity_id=target_entity_id,
+                        relationship_type=relationship_type,
+                        source_document_id=source_document_id,
+                        confidence=confidence,
+                        usage_count=1,
+                        last_used=datetime.utcnow()
+                    )
+                    db.add(new_relationship)
+                    await db.commit()
+                    await db.refresh(new_relationship)
+                    return new_relationship
             except Exception as e:
-                self.logger.error(f"保存关系失败: {e}")
+                self.logger.error(f"保存关系统计失败: {e}")
                 await db.rollback()
                 raise
+
+    async def get_entity_stats(
+        self,
+        entity_type: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """获取实体统计信息"""
+        async for db in get_database():
+            try:
+                conditions = []
+                if entity_type:
+                    conditions.append(Entity.entity_type == entity_type)
+                
+                if conditions:
+                    where_clause = and_(*conditions)
+                else:
+                    where_clause = text("1=1")
+                
+                # 总数统计
+                count_stmt = select(func.count(Entity.id)).where(where_clause)
+                total_result = await db.execute(count_stmt)
+                total_count = total_result.scalar()
+                
+                # 按类型统计
+                type_stmt = select(
+                    Entity.entity_type,
+                    func.count(Entity.id).label('count'),
+                    func.sum(Entity.mention_count).label('total_mentions')
+                ).group_by(Entity.entity_type)
+                type_result = await db.execute(type_stmt)
+                type_stats = {
+                    row.entity_type: {
+                        'count': row.count,
+                        'total_mentions': row.total_mentions or 0
+                    } for row in type_result.all()
+                }
+                
+                # 热门实体（按提及次数）
+                popular_stmt = (
+                    select(Entity.name, Entity.entity_type, Entity.mention_count)
+                    .where(where_clause)
+                    .order_by(Entity.mention_count.desc())
+                    .limit(10)
+                )
+                popular_result = await db.execute(popular_stmt)
+                popular_entities = [
+                    {
+                        'name': row.name,
+                        'type': row.entity_type,
+                        'mentions': row.mention_count
+                    } for row in popular_result.all()
+                ]
+                
+                return {
+                    "total_entities": total_count,
+                    "by_type": type_stats,
+                    "popular_entities": popular_entities
+                }
+            except Exception as e:
+                self.logger.error(f"获取实体统计失败: {e}")
+                return {"total_entities": 0, "by_type": {}, "popular_entities": []}
+
+    async def get_relationship_stats(self) -> Dict[str, Any]:
+        """获取关系统计信息"""
+        async for db in get_database():
+            try:
+                # 总数统计
+                count_stmt = select(func.count(Relationship.id))
+                total_result = await db.execute(count_stmt)
+                total_count = total_result.scalar()
+                
+                # 按类型统计
+                type_stmt = select(
+                    Relationship.relationship_type,
+                    func.count(Relationship.id).label('count'),
+                    func.sum(Relationship.usage_count).label('total_usage')
+                ).group_by(Relationship.relationship_type)
+                type_result = await db.execute(type_stmt)
+                type_stats = {
+                    row.relationship_type: {
+                        'count': row.count,
+                        'total_usage': row.total_usage or 0
+                    } for row in type_result.all()
+                }
+                
+                return {
+                    "total_relationships": total_count,
+                    "by_type": type_stats
+                }
+            except Exception as e:
+                self.logger.error(f"获取关系统计失败: {e}")
+                return {"total_relationships": 0, "by_type": {}}
 
     # 系统配置相关方法
     async def get_config(self, config_key: str) -> Optional[Any]:

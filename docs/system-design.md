@@ -92,21 +92,51 @@ graph LR
     Knowledge --> MySQL[(全文搜索)]
 ```
 
-#### 3. **数据存储策略**
-采用**多模态数据存储**架构，各数据库发挥最佳性能：
+#### 3. **数据存储策略（重构后 - 单一数据源原则）**
+采用**单一数据源**原则，避免数据冗余和同步复杂性：
 
-| 数据库 | 主要职责 | 数据类型 | 优势 |
-|--------|----------|----------|------|
-| MySQL | 关系数据、事务处理 | 会话、消息、配置 | ACID、复杂查询 |
-| Neo4j | 知识图谱、关系推理 | 实体、关系 | 图遍历、路径查询 |
-| Weaviate | 向量搜索、语义相似 | 文档嵌入向量 | 语义搜索、相似匹配 |
-| Redis | 缓存、临时存储 | 嵌入缓存、会话 | 高速访问、过期管理 |
+| 数据库 | 主要职责 | 数据类型 | 设计原则 | 优势 |
+|--------|----------|----------|----------|------|
+| Weaviate | **文档主存储** | 完整文档内容+元数据+向量 | 单一数据源 | 语义搜索、内容检索、原生向量能力 |
+| Neo4j | **图数据主存储** | 完整实体+关系+属性 | 单一数据源 | 图遍历、关系推理、复杂查询 |
+| MySQL | **业务逻辑存储** | 会话、统计、配置 | 业务专用 | 事务处理、统计分析、会话管理 |
+| Redis | **缓存和临时数据** | 嵌入缓存、会话状态 | 性能优化 | 高速访问、过期管理 |
+
+#### **数据流设计（重构后）**
+
+**文档摄入流程**：
+1. 文档接收 → 内容解析 → 向量化
+2. **Weaviate存储**（主存储：完整内容+元数据+向量）
+3. **MySQL记录**（业务统计：weaviate_id+访问统计）
+4. **实体抽取** → **Neo4j存储**（完整实体+关系）
+5. **关联创建**（Neo4j Document节点引用weaviate_id）
+
+**搜索查询流程**：
+1. 用户查询 → 查询分析 → 路由策略
+2. **文档搜索**：直接查询Weaviate主存储
+3. **实体搜索**：直接查询Neo4j主存储  
+4. **统计更新**：MySQL更新访问计数
+5. 结果聚合 → 排序 → 返回
+
+**架构优势**：
+- **无数据同步**：消除跨数据库同步开销和一致性问题
+- **性能提升**：直接从主存储查询，无需关联查询
+- **维护简化**：每个数据库职责明确，代码逻辑清晰
+- **扩展性好**：可独立优化和扩展每个数据库
 
 ## 💾 数据库详细设计
 
-### MySQL - 关系数据存储
+### 架构重构：单一数据源原则 (Single Source of Truth)
 
-#### 核心表结构设计
+基于架构评估和优化，系统已采用**单一数据源**的设计原则，避免数据冗余和同步复杂性：
+
+- **Weaviate**: 文档和向量数据的**主存储**，包含完整文档内容、元数据和向量
+- **Neo4j**: 图数据和关系的**主存储**，包含完整实体和关系信息
+- **MySQL**: 业务逻辑和统计数据的存储，仅存储引用ID和业务统计信息
+
+### MySQL - 业务逻辑和统计数据存储
+
+#### 核心表结构设计（重构后）
 
 **会话管理模块**
 ```sql
@@ -137,48 +167,54 @@ CREATE TABLE session_messages (
 );
 ```
 
-**知识管理模块**
+**知识管理模块（重构后 - 仅存储业务统计）**
 ```sql
--- 知识文档表
+-- 知识文档统计表 - 实际文档存储在Weaviate
 CREATE TABLE knowledge_documents (
     id VARCHAR(36) PRIMARY KEY,
+    weaviate_id VARCHAR(100) NOT NULL UNIQUE INDEX COMMENT 'Weaviate文档ID',
     title VARCHAR(500) NOT NULL,
-    content TEXT NOT NULL,
     source ENUM('wiki','gitlab','jira','logs') NOT NULL INDEX,
     source_id VARCHAR(100) COMMENT '原系统ID',
     category VARCHAR(100) INDEX COMMENT '文档分类',
-    tags JSON COMMENT '标签数组',
-    embedding_id VARCHAR(100) COMMENT 'Weaviate向量ID',
+    -- 业务统计字段
+    view_count INTEGER DEFAULT 0 COMMENT '访问次数',
+    last_accessed DATETIME NULL COMMENT '最后访问时间',
     created_at DATETIME DEFAULT NOW() INDEX,
     updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
-    FULLTEXT INDEX ft_title_content (title, content)
+    INDEX idx_source_category (source, category),
+    INDEX idx_created_at (created_at)
 );
 
--- 实体表（与Neo4j同步）
+-- 实体统计表 - 实际实体存储在Neo4j
 CREATE TABLE entities (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
     entity_type VARCHAR(100) NOT NULL INDEX,
-    description TEXT,
-    properties JSON COMMENT '实体属性字典',
-    neo4j_id BIGINT INDEX COMMENT 'Neo4j节点ID',
+    source_document_id VARCHAR(100) COMMENT '来源文档Weaviate ID',
+    confidence FLOAT DEFAULT 1.0 COMMENT 'NER提取置信度',
+    -- 业务统计字段
+    mention_count INTEGER DEFAULT 1 COMMENT '被提及次数',
+    last_mentioned DATETIME DEFAULT NOW() COMMENT '最后提及时间',
     created_at DATETIME DEFAULT NOW(),
-    updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
-    UNIQUE KEY unique_name_type (name, entity_type)
+    UNIQUE KEY unique_name_type (name, entity_type),
+    INDEX idx_type_confidence (entity_type, confidence)
 );
 
--- 关系表（与Neo4j同步）
+-- 关系统计表 - 实际关系存储在Neo4j  
 CREATE TABLE relationships (
     id VARCHAR(36) PRIMARY KEY,
     source_entity_id VARCHAR(36) NOT NULL,
     target_entity_id VARCHAR(36) NOT NULL,
     relationship_type VARCHAR(100) NOT NULL INDEX,
-    properties JSON COMMENT '关系属性',
-    confidence FLOAT DEFAULT 1.0 COMMENT '置信度',
-    neo4j_id BIGINT COMMENT 'Neo4j关系ID',
+    source_document_id VARCHAR(100) COMMENT '来源文档Weaviate ID',
+    confidence FLOAT DEFAULT 1.0 COMMENT '关系置信度',
+    -- 业务统计字段
+    usage_count INTEGER DEFAULT 1 COMMENT '被使用次数',
+    last_used DATETIME DEFAULT NOW() COMMENT '最后使用时间',
     created_at DATETIME DEFAULT NOW(),
-    FOREIGN KEY (source_entity_id) REFERENCES entities(id),
-    FOREIGN KEY (target_entity_id) REFERENCES entities(id)
+    FOREIGN KEY (source_entity_id) REFERENCES entities(id) ON DELETE CASCADE,
+    FOREIGN KEY (target_entity_id) REFERENCES entities(id) ON DELETE CASCADE
 );
 ```
 
@@ -213,7 +249,7 @@ CREATE TABLE task_queue (
 );
 ```
 
-#### 数据存储策略
+#### 数据存储策略（重构后）
 
 **1. 会话和消息数据**
 - **设计原理**: 支持多用户并发会话，消息历史追溯
@@ -222,30 +258,60 @@ CREATE TABLE task_queue (
   - `created_at`时间索引支持时间范围查询
   - `message_metadata`存储Agent执行轨迹，支持调试和优化
 
-**2. 知识文档管理**
-- **设计原理**: 作为多模态搜索的元数据中心
+**2. 知识文档业务统计**
+- **设计原理**: 仅存储文档的业务元数据和访问统计，实际内容在Weaviate
 - **关联设计**:
-  - `embedding_id` → Weaviate向量ID
-  - 全文索引支持MySQL内部文本搜索
+  - `weaviate_id` → 链接到Weaviate的主存储文档
+  - 去除了`content`和`embedding_id`字段，避免数据冗余
+  - `view_count`和`last_accessed`追踪文档使用情况
   - `source`枚举严格控制数据源类型
 
-**3. 实体关系映射**
-- **设计原理**: MySQL作为Neo4j的结构化存储镜像
-- **同步机制**:
-  - `neo4j_id`字段建立双向映射
-  - `properties` JSON字段存储复杂属性
-  - 支持实体关系的CRUD操作和事务一致性
+**3. 实体关系业务统计** 
+- **设计原理**: 仅存储实体和关系的业务统计信息，实际图数据在Neo4j
+- **统计字段**:
+  - `mention_count`和`last_mentioned`追踪实体被提及情况
+  - `usage_count`和`last_used`追踪关系使用频率
+  - 去除了`neo4j_id`、`properties`、`description`等冗余字段
+  - 保留`confidence`用于NER和关系抽取的质量评估
 
-### Neo4j - 知识图谱存储
+**4. 单一数据源优势**:
+- **消除同步复杂性**: 无需维护跨数据库的数据一致性
+- **提升性能**: 直接从主存储查询，减少关联查询开销  
+- **简化维护**: 每个数据库职责明确，代码逻辑清晰
+- **便于扩展**: 可独立优化和扩展每个存储系统
 
-#### 图数据模型设计
+### Neo4j - 知识图谱主存储（重构后）
+
+#### 图数据模型设计（完整存储）
 
 ```cypher
-// 实体节点类型
+// 实体节点类型 - 完整存储实体信息
 CREATE CONSTRAINT entity_name_type IF NOT EXISTS 
 FOR (e:Entity) REQUIRE (e.name, e.type) IS UNIQUE;
 
-// 核心节点类型
+// 文档节点类型 - 链接到Weaviate的文档
+CREATE CONSTRAINT document_weaviate_id IF NOT EXISTS
+FOR (d:Document) REQUIRE d.weaviate_id IS UNIQUE;
+
+// 核心节点类型（完整属性存储）
+(:Entity {
+    name: str,
+    type: str,
+    properties: map,           // 完整属性信息
+    confidence: float,         // NER置信度
+    created_at: datetime,
+    updated_at: datetime
+})
+
+(:Document {
+    weaviate_id: str,          // 链接到Weaviate文档的ID
+    title: str,
+    source: str,               // wiki, gitlab, jira, logs
+    category: str,
+    created_at: datetime
+})
+
+// 专业化节点类型
 (:Technology)    // 技术组件：CPU, MySQL, Kubernetes等
 (:Problem)       // 问题类型：高CPU、连接超时等  
 (:Solution)      // 解决方案：重启服务、调整配置等
@@ -254,22 +320,67 @@ FOR (e:Entity) REQUIRE (e.name, e.type) IS UNIQUE;
 (:Resource)      // 资源类型：内存、磁盘、网络等
 ```
 
-**关系类型设计**
+**关系类型设计（完整存储）**
 ```cypher
+// 实体间关系（完整属性存储）
+CREATE (source:Entity)-[r:RELATION_TYPE {
+    properties: map,           // 完整关系属性
+    confidence: float,         // 关系置信度
+    source_document_id: str,   // 来源文档Weaviate ID
+    created_at: datetime,
+    updated_at: datetime
+}]->(target:Entity)
+
+// 文档关联关系
+(Entity)-[:MENTIONED_IN {
+    context: str,              // 提及上下文
+    position: int,             // 在文档中的位置
+    extraction_method: str     // 抽取方法 (NER, Manual, etc.)
+}]->(Document)
+
 // 问题诊断关系
-(Problem)-[:CAUSED_BY]->(Technology)
-(Problem)-[:SOLVED_BY]->(Solution)
-(Technology)-[:DEPENDS_ON]->(Technology)
+(Problem)-[:CAUSED_BY {
+    likelihood: float,
+    evidence: str[]
+}]->(Technology)
+
+(Problem)-[:SOLVED_BY {
+    effectiveness: float,
+    success_rate: float,
+    steps: str[]
+}]->(Solution)
+
+(Technology)-[:DEPENDS_ON {
+    dependency_type: str,      // hard, soft, optional
+    criticality: str           // critical, important, minor
+}]->(Technology)
 
 // 运维流程关系
-(Person)-[:RESPONSIBLE_FOR]->(Technology)
-(Process)-[:REQUIRES]->(Resource)
-(Solution)-[:INVOLVES]->(Process)
+(Person)-[:RESPONSIBLE_FOR {
+    role: str,
+    expertise_level: str
+}]->(Technology)
+
+(Process)-[:REQUIRES {
+    resource_amount: str,
+    priority: str
+}]->(Resource)
+
+(Solution)-[:INVOLVES {
+    execution_order: int,
+    estimated_time: str
+}]->(Process)
 
 // 知识关联关系
-(Problem)-[:SIMILAR_TO]->(Problem)
-(Solution)-[:ALTERNATIVE_TO]->(Solution)
-(Technology)-[:MONITORS]->(Technology)
+(Problem)-[:SIMILAR_TO {
+    similarity_score: float,
+    comparison_aspects: str[]
+}]->(Problem)
+
+(Solution)-[:ALTERNATIVE_TO {
+    comparison_score: float,
+    trade_offs: str[]
+}]->(Solution)
 ```
 
 #### 图查询优化
@@ -300,15 +411,15 @@ MATCH (t1:Technology {name: $tech_name})-[:DEPENDS_ON*1..2]->(t2:Technology)
 RETURN t2.name, t2.status, t2.health_check_url;
 ```
 
-### Weaviate - 向量数据库存储
+### Weaviate - 文档主存储（重构后）
 
-#### Schema设计
+#### Schema设计（完整文档存储）
 
 ```python
-# 知识文档类定义
+# 知识文档类定义 - 完整文档和元数据存储
 knowledge_document_schema = {
     "class": "KnowledgeDocument",
-    "description": "运维知识文档向量存储",
+    "description": "知识文档主存储 - 包含完整文档信息和元数据",
     "properties": [
         {
             "name": "title",
@@ -318,12 +429,17 @@ knowledge_document_schema = {
         {
             "name": "content", 
             "dataType": ["text"],
-            "description": "文档内容"
+            "description": "文档完整内容"
         },
         {
             "name": "source",
             "dataType": ["string"],
             "description": "数据源：wiki/gitlab/jira/logs"
+        },
+        {
+            "name": "source_id",
+            "dataType": ["string"],
+            "description": "源系统中的ID"
         },
         {
             "name": "category",
@@ -336,26 +452,74 @@ knowledge_document_schema = {
             "description": "标签列表"
         },
         {
-            "name": "mysql_id",
+            "name": "author",
             "dataType": ["string"],
-            "description": "MySQL中对应的文档ID"
+            "description": "文档作者"
+        },
+        {
+            "name": "version",
+            "dataType": ["string"],
+            "description": "文档版本"
+        },
+        {
+            "name": "language",
+            "dataType": ["string"],
+            "description": "文档语言"
+        },
+        {
+            "name": "file_path",
+            "dataType": ["string"],
+            "description": "原始文件路径"
         },
         {
             "name": "created_at",
             "dataType": ["date"],
             "description": "创建时间"
+        },
+        {
+            "name": "updated_at",
+            "dataType": ["date"],
+            "description": "更新时间"
         }
     ],
-    "vectorizer": "text2vec-transformers",
-    "moduleConfig": {
-        "text2vec-transformers": {
-            "model": "sentence-transformers/all-MiniLM-L6-v2",
-            "options": {
-                "waitForModel": True,
-                "useGPU": False
-            }
+    "vectorizer": "none",  # 手动提供向量，更灵活控制
+    "indexNullState": False,
+    "indexFilterable": True,
+    "indexSearchable": True
+}
+
+# 日志条目类定义
+log_entry_schema = {
+    "class": "LogEntry", 
+    "description": "系统日志条目",
+    "properties": [
+        {
+            "name": "timestamp",
+            "dataType": ["date"],
+            "description": "日志时间戳"
+        },
+        {
+            "name": "level",
+            "dataType": ["string"],
+            "description": "日志级别"
+        },
+        {
+            "name": "service",
+            "dataType": ["string"],
+            "description": "服务名称"
+        },
+        {
+            "name": "message",
+            "dataType": ["text"],
+            "description": "日志消息"
+        },
+        {
+            "name": "metadata",
+            "dataType": ["text"],
+            "description": "附加元数据JSON"
         }
-    }
+    ],
+    "vectorizer": "none"
 }
 ```
 
