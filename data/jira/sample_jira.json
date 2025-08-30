@@ -1,0 +1,53 @@
+[
+  {
+    "id": "AIOPS-001",
+    "key": "AIOPS-001",
+    "title": "生产环境CPU使用率异常高报警",
+    "description": "生产环境web-server集群CPU使用率持续超过80%，影响用户体验。需要排查具体原因并制定优化方案。初步怀疑是新上线的推荐算法导致计算量增加。",
+    "type": "故障",
+    "priority": "高",
+    "status": "已解决",
+    "assignee": "运维团队",
+    "reporter": "监控系统",
+    "created": "2024-08-22T08:30:00Z",
+    "updated": "2024-08-22T14:20:00Z",
+    "resolved": "2024-08-22T14:20:00Z",
+    "components": ["web-server", "推荐系统"],
+    "labels": ["performance", "cpu", "production"],
+    "resolution": "通过优化推荐算法缓存策略和增加服务器实例数量解决"
+  },
+  {
+    "id": "AIOPS-002", 
+    "key": "AIOPS-002",
+    "title": "数据库连接池耗尽导致服务不可用",
+    "description": "凌晨2点开始，多个微服务出现数据库连接超时错误。检查发现连接池配置过小，且存在连接泄露问题。影响了订单处理和用户登录功能。",
+    "type": "故障",
+    "priority": "紧急",
+    "status": "已解决", 
+    "assignee": "后端开发团队",
+    "reporter": "值班工程师",
+    "created": "2024-08-20T02:15:00Z",
+    "updated": "2024-08-20T06:30:00Z",
+    "resolved": "2024-08-20T06:30:00Z",
+    "components": ["数据库", "连接池", "微服务"],
+    "labels": ["database", "connection", "urgent"],
+    "resolution": "修复连接泄露代码，增加连接池大小，添加连接监控告警"
+  },
+  {
+    "id": "AIOPS-003",
+    "key": "AIOPS-003", 
+    "title": "Redis集群节点故障切换",
+    "description": "Redis集群中一个master节点出现硬件故障，触发自动故障转移。过程中部分缓存服务出现短暂不可用，影响了用户会话管理。",
+    "type": "事件",
+    "priority": "中",
+    "status": "已解决",
+    "assignee": "基础设施团队",
+    "reporter": "监控系统",
+    "created": "2024-08-18T15:45:00Z",
+    "updated": "2024-08-18T16:20:00Z", 
+    "resolved": "2024-08-18T16:20:00Z",
+    "components": ["Redis", "缓存", "集群"],
+    "labels": ["redis", "failover", "hardware"],
+    "resolution": "故障转移成功，更换故障硬件，优化集群监控策略"
+  }
+]

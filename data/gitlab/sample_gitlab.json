@@ -1,0 +1,66 @@
+[
+  {
+    "id": "mr_001",
+    "title": "修复用户认证服务内存泄露问题",
+    "description": "发现auth-service在高并发场景下存在内存泄露，主要原因是JWT token缓存没有正确释放。修改了token管理逻辑，添加了自动清理机制。",
+    "author": "张三",
+    "created_at": "2024-08-20T10:00:00Z",
+    "merged_at": "2024-08-20T16:30:00Z",
+    "branch": "bugfix/auth-memory-leak",
+    "target_branch": "main",
+    "files_changed": [
+      "src/auth/token_manager.py",
+      "src/auth/middleware.py",
+      "tests/auth/test_token_manager.py"
+    ],
+    "changes": {
+      "additions": 45,
+      "deletions": 23
+    },
+    "labels": ["bug", "auth", "performance"],
+    "status": "merged"
+  },
+  {
+    "id": "mr_002",
+    "title": "添加API限流中间件",
+    "description": "为防止API被恶意调用，添加了基于Redis的分布式限流中间件。支持按IP、用户ID等维度进行限流，可配置不同的限流策略。",
+    "author": "李四",
+    "created_at": "2024-08-18T14:20:00Z", 
+    "merged_at": "2024-08-19T11:45:00Z",
+    "branch": "feature/api-rate-limiting",
+    "target_branch": "main",
+    "files_changed": [
+      "src/middleware/rate_limiter.py",
+      "src/config/settings.py",
+      "requirements.txt",
+      "docs/api_rate_limiting.md"
+    ],
+    "changes": {
+      "additions": 128,
+      "deletions": 5
+    },
+    "labels": ["feature", "security", "middleware"],
+    "status": "merged"
+  },
+  {
+    "id": "mr_003",
+    "title": "升级Kubernetes部署配置",
+    "description": "将应用从Kubernetes 1.24升级到1.27，更新了deployment配置，修复了废弃API的使用问题。添加了resources limits和requests配置。",
+    "author": "王五",
+    "created_at": "2024-08-16T09:10:00Z",
+    "merged_at": "2024-08-17T15:20:00Z", 
+    "branch": "upgrade/k8s-1.27",
+    "target_branch": "main",
+    "files_changed": [
+      "k8s/deployment.yaml",
+      "k8s/service.yaml",
+      "k8s/ingress.yaml"
+    ],
+    "changes": {
+      "additions": 67,
+      "deletions": 42
+    },
+    "labels": ["upgrade", "kubernetes", "infrastructure"],
+    "status": "merged"
+  }
+]

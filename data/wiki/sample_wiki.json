@@ -1,0 +1,29 @@
+[
+  {
+    "id": "wiki_001",
+    "title": "Kubernetes Pod 故障排查指南",
+    "content": "当Kubernetes Pod出现故障时，首先检查Pod状态。使用kubectl describe pod命令查看详细信息。常见问题包括：镜像拉取失败、资源不足、配置错误等。对于ImagePullBackOff错误，检查镜像名称和registry连接。对于CrashLoopBackOff，查看容器日志找出启动失败原因。",
+    "category": "运维文档",
+    "tags": ["kubernetes", "pod", "故障排查", "容器"],
+    "last_updated": "2024-08-15T10:30:00Z",
+    "author": "运维团队"
+  },
+  {
+    "id": "wiki_002", 
+    "title": "微服务架构最佳实践",
+    "content": "微服务架构设计原则：单一职责、去中心化、故障隔离。每个服务应该有独立的数据库，通过API进行通信。使用服务注册发现机制，如Consul或Eureka。实施断路器模式防止级联故障。监控和日志聚合是必不可少的组件。",
+    "category": "架构设计",
+    "tags": ["微服务", "架构", "API", "监控"],
+    "last_updated": "2024-08-10T14:20:00Z",
+    "author": "架构团队"
+  },
+  {
+    "id": "wiki_003",
+    "title": "数据库性能优化策略",
+    "content": "MySQL性能优化包括索引优化、查询优化、配置调优。创建合适的索引可以大幅提升查询速度，但过多索引会影响写入性能。分析慢查询日志，识别性能瓶颈。合理配置innodb_buffer_pool_size、max_connections等参数。考虑读写分离和分库分表策略。",
+    "category": "数据库",
+    "tags": ["mysql", "性能优化", "索引", "慢查询"],
+    "last_updated": "2024-08-12T09:15:00Z",
+    "author": "DBA团队"
+  }
+]

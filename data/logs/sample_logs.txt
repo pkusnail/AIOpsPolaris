@@ -1,0 +1,15 @@
+2024-08-22 08:30:15 [ERROR] web-server-01: CPU usage 85%, memory usage 78%
+2024-08-22 08:30:20 [WARN] auth-service: JWT token validation failed for user_id=12345
+2024-08-22 08:30:25 [INFO] api-gateway: Request processed successfully, endpoint=/api/users, response_time=120ms
+2024-08-22 08:30:30 [ERROR] database-pool: Connection timeout, pool_size=50, active_connections=50
+2024-08-22 08:30:35 [INFO] recommendation-engine: Algorithm execution completed, processing_time=2.5s
+2024-08-22 08:30:40 [WARN] redis-cluster: Node redis-01 responding slowly, latency=500ms
+2024-08-22 08:30:45 [ERROR] order-service: Failed to process order order_id=98765, error=database_connection_failed
+2024-08-22 08:30:50 [INFO] load-balancer: Health check passed for all upstream servers
+2024-08-22 08:30:55 [ERROR] auth-service: Memory usage critical 95%, gc_time=800ms
+2024-08-22 08:31:00 [WARN] api-gateway: Rate limit exceeded for IP=192.168.1.100, requests=1500/hour
+2024-08-22 08:31:05 [INFO] user-service: User profile updated successfully, user_id=67890
+2024-08-22 08:31:10 [ERROR] kubernetes: Pod web-server-02 crashed, exit_code=137
+2024-08-22 08:31:15 [WARN] notification-service: Email delivery delayed, queue_size=250
+2024-08-22 08:31:20 [INFO] monitoring: Alert resolved - CPU usage back to normal
+2024-08-22 08:31:25 [ERROR] payment-service: Transaction failed, transaction_id=tx_001, error=timeout
