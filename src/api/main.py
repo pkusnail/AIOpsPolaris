@@ -5,6 +5,7 @@ AIOps Polaris API - 统一版本
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import Dict, Any, Optional, List
 from datetime import datetime
@@ -149,6 +150,8 @@ async def root():
             "metrics": "/metrics", 
             "stats": "/stats",
             "chat": "/chat",
+            "chat_stream": "/chat/stream",
+            "task_status": "/chat/task_status/{task_id}",
             "llm_info": "/llm/info",
             "llm_reload": "/llm/reload"
         }
@@ -272,7 +275,7 @@ async def chat(
     llm: LLMAdapter = Depends(get_llm_adapter_dep),
     metrics_svc: MetricsService = Depends(get_metrics_service_dep)
 ):
-    """智能聊天端点 - 使用LLM适配器"""
+    """智能聊天端点 - 集成完整RCA流程"""
     start_time = datetime.now()
     provider_name = "unknown"
     
@@ -290,25 +293,58 @@ async def chat(
         provider_info = llm.get_provider_info()
         provider_name = provider_info.get("provider", "unknown")
         
-        # 使用LLM适配器处理查询
-        response = await llm.generate_response(query)
-        
-        # 记录成功的LLM请求
-        duration = (datetime.now() - start_time).total_seconds()
-        metrics_svc.record_llm_request(
-            provider=provider_name,
-            duration=duration,
-            status="success",
-            input_tokens=len(query.split()),  # 简单估算
-            output_tokens=len(response.split()) if response else 0
-        )
-        
-        return {
-            "response": response,
-            "timestamp": datetime.now(),
-            "session_id": request.get("session_id", "demo-session"),
-            "llm_provider": provider_name
-        }
+        # 优先尝试使用RCA聊天服务
+        try:
+            from .rca_chat_endpoint import process_rca_chat_request
+            
+            logger.info(f"尝试使用RCA聊天服务处理查询: {query[:50]}...")
+            rca_result = await process_rca_chat_request(request)
+            
+            # 记录成功的RCA请求
+            duration = (datetime.now() - start_time).total_seconds()
+            metrics_svc.record_llm_request(
+                provider="rca_pipeline",
+                duration=duration,
+                status="success",
+                input_tokens=len(query.split()),
+                output_tokens=len(rca_result.get("response", "").split())
+            )
+            
+            return {
+                "response": rca_result.get("response", "RCA分析完成，但响应为空"),
+                "timestamp": datetime.now(),
+                "session_id": request.get("session_id", "demo-session"),
+                "llm_provider": "rca_pipeline",
+                "analysis_type": rca_result.get("analysis_type", "unknown"),
+                "evidence_count": rca_result.get("evidence_count", 0),
+                "confidence": rca_result.get("confidence", 0.0),
+                "processing_time": rca_result.get("processing_time", duration)
+            }
+            
+        except Exception as rca_error:
+            logger.warning(f"RCA聊天服务失败，回退到LLM适配器: {rca_error}")
+            
+            # 回退到原来的LLM适配器
+            response = await llm.generate_response(query)
+            
+            # 记录成功的LLM请求
+            duration = (datetime.now() - start_time).total_seconds()
+            metrics_svc.record_llm_request(
+                provider=provider_name,
+                duration=duration,
+                status="success",
+                input_tokens=len(query.split()),
+                output_tokens=len(response.split()) if response else 0
+            )
+            
+            return {
+                "response": response + "\n\n*注意: RCA分析服务暂时不可用，此回答来自基础LLM。*",
+                "timestamp": datetime.now(),
+                "session_id": request.get("session_id", "demo-session"),
+                "llm_provider": provider_name,
+                "analysis_type": "fallback_llm",
+                "fallback_reason": str(rca_error)
+            }
         
     except Exception as e:
         # 记录失败的LLM请求
@@ -327,6 +363,206 @@ async def chat(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Chat processing failed: {str(e)}"
+        )
+
+
+@app.post("/chat/stream", response_model=Dict[str, Any])
+async def start_streaming_chat(
+    request: Dict[str, Any],
+    metrics_svc: MetricsService = Depends(get_metrics_service_dep)
+):
+    """启动流式聊天任务"""
+    try:
+        metrics_svc.increment_counter("api_requests_total", {"endpoint": "/chat/stream"})
+        
+        message = request.get("message", "")
+        user_id = request.get("user_id", "")
+        session_id = request.get("session_id")
+        temperature = request.get("temperature", 0.7)
+        
+        if not message or not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Message and user_id are required"
+            )
+        
+        # 导入流式RCA服务
+        from .streaming_rca_service import streaming_rca_service
+        
+        # 启动RCA任务
+        task_id = await streaming_rca_service.start_rca_task(
+            message=message,
+            user_id=user_id, 
+            session_id=session_id,
+            temperature=temperature
+        )
+        
+        logger.info(f"启动流式RCA任务: {task_id}")
+        
+        return {
+            "success": True,
+            "task_id": task_id,
+            "session_id": session_id or f"session_{int(datetime.now().timestamp())}",
+            "estimated_duration": 3.5,
+            "message": "RCA分析任务已启动，请使用task_id轮询状态",
+            "polling_interval": 500,  # 建议轮询间隔(毫秒)
+            "timestamp": datetime.now()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to start streaming chat: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start streaming chat: {str(e)}"
+        )
+
+
+@app.get("/chat/task_status/{task_id}", response_model=Dict[str, Any])
+async def get_task_status(
+    task_id: str,
+    metrics_svc: MetricsService = Depends(get_metrics_service_dep)
+):
+    """获取任务状态"""
+    try:
+        metrics_svc.increment_counter("api_requests_total", {"endpoint": "/task_status"})
+        
+        # 导入流式RCA服务
+        from .streaming_rca_service import streaming_rca_service
+        
+        task_status = streaming_rca_service.get_task_status(task_id)
+        
+        if task_status is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Task {task_id} not found"
+            )
+        
+        return task_status
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get task status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get task status: {str(e)}"
+        )
+
+
+@app.post("/chat/multi_agent", response_model=Dict[str, Any])
+async def start_multi_agent_chat(
+    request: Dict[str, Any],
+    metrics_svc: MetricsService = Depends(get_metrics_service_dep)
+):
+    """启动Multi-Agent RCA分析任务"""
+    try:
+        metrics_svc.increment_counter("api_requests_total", {"endpoint": "/chat/multi_agent"})
+        
+        message = request.get("message", "")
+        user_id = request.get("user_id", "")
+        session_id = request.get("session_id")
+        
+        if not message or not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Message and user_id are required"
+            )
+        
+        # 导入Enhanced流式RCA服务
+        from .enhanced_streaming_rca_service import enhanced_streaming_rca_service
+        
+        task_id = await enhanced_streaming_rca_service.start_multi_agent_rca_task(
+            message, user_id, session_id
+        )
+        
+        return {
+            "success": True,
+            "task_id": task_id,
+            "session_id": session_id or f"session_{int(time.time())}",
+            "message": "Multi-Agent RCA分析任务已启动",
+            "polling_interval": 500,
+            "supports_interruption": True,
+            "timestamp": datetime.now()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to start multi-agent chat: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start multi-agent chat: {str(e)}"
+        )
+
+
+@app.get("/chat/multi_agent_status/{task_id}", response_model=Dict[str, Any])
+async def get_multi_agent_task_status(
+    task_id: str,
+    metrics_svc: MetricsService = Depends(get_metrics_service_dep)
+):
+    """获取Multi-Agent任务详细状态"""
+    try:
+        metrics_svc.increment_counter("api_requests_total", {"endpoint": "/multi_agent_status"})
+        
+        # 导入Enhanced流式RCA服务
+        from .enhanced_streaming_rca_service import enhanced_streaming_rca_service
+        
+        task_status = enhanced_streaming_rca_service.get_multi_agent_task_status(task_id)
+        
+        if task_status is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Multi-Agent task {task_id} not found"
+            )
+        
+        return task_status
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get multi-agent task status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get multi-agent task status: {str(e)}"
+        )
+
+
+@app.post("/chat/interrupt/{task_id}", response_model=Dict[str, Any])
+async def interrupt_multi_agent_task(
+    task_id: str,
+    request: Dict[str, Any] = None,
+    metrics_svc: MetricsService = Depends(get_metrics_service_dep)
+):
+    """中断Multi-Agent任务执行"""
+    try:
+        metrics_svc.increment_counter("api_requests_total", {"endpoint": "/interrupt"})
+        
+        reason = "用户请求中断"
+        if request:
+            reason = request.get("reason", reason)
+        
+        # 导入Enhanced流式RCA服务
+        from .enhanced_streaming_rca_service import enhanced_streaming_rca_service
+        
+        success = await enhanced_streaming_rca_service.interrupt_task(task_id, reason)
+        
+        if success:
+            return {
+                "success": True,
+                "message": f"任务 {task_id} 已成功中断",
+                "reason": reason,
+                "timestamp": datetime.now()
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"任务 {task_id} 无法中断或不存在",
+                "timestamp": datetime.now()
+            }
+        
+    except Exception as e:
+        logger.error(f"Failed to interrupt task: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to interrupt task: {str(e)}"
         )
 
 
