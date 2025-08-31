@@ -74,24 +74,39 @@ AIOps Polaris 是一个基于知识图谱和语义搜索的智能运维平台，
 - 结合历史数据和知识图谱进行根因分析
 - 提供个性化的解决方案推荐
 
-### 2. 知识图谱构建
+### 2. **🔬 AIOps根因分析实验环境**
+- **完整的微服务故障模拟**: 5种服务类型，2个数据中心的真实架构
+- **10个精心设计的故障场景**: 涵盖CPU过载、磁盘IO、内存泄漏、网络分区等
+- **AI训练数据集**: 结构化的incident数据 + 时序日志 + RCA分析模式
+- **LLM训练Pipeline**: 专门为根因分析设计的Prompt模板和训练方法
+- 📚 **详细文档**: [实验环境设置 - 实验一](docs/experiment_setup_1.md)
+
+### 3. 知识图谱构建
 - 自动从多源数据抽取实体和关系
 - 构建运维领域专业知识图谱
 - 支持图查询和推理分析
 
-### 3. 混合搜索引擎
+### 4. 混合搜索引擎
 - 向量相似性搜索（语义理解）
 - 关键词精确匹配
 - 图结构关系查询
 - 多维度融合排序
 
-### 4. 智能对话系统
+### 5. 🔍 RAG Pipeline系统
+- **双Collection架构**: EmbeddingCollection(向量搜索) + FullTextCollection(全文搜索)
+- **混合检索策略**: 向量相似度 + BM25算法 + 知识图谱关系查询
+- **多源数据集成**: 日志文件、Wiki文档、GitLab项目、Jira工单统一索引
+- **智能过滤系统**: 支持服务、主机、时间、文件、行号等多维度过滤
+- **RCA专用搜索**: 针对根本原因分析优化的搜索接口
+- 📚 **详细文档**: [RAG Pipeline架构](docs/rag_pipeline_architecture.md)
+
+### 6. 智能对话系统
 - 基于LangGraph的多轮对话
 - 支持多用户并发会话
 - 上下文感知和记忆能力
 - 任务规划和执行
 
-### 5. 实时数据处理
+### 7. 实时数据处理
 - 日志流式处理和分析
 - 异常模式识别
 - 自动告警和通知
@@ -157,6 +172,41 @@ echo "OPENAI_API_KEY=sk-your-openai-api-key-here" > .env
 8. ✅ 启动API服务和Gradio界面
 9. ✅ 显示所有访问地址和连接信息
 
+### RAG Pipeline配置和测试
+
+完成基础启动后，需要建立RAG数据索引：
+
+#### 🔧 建立RAG数据索引
+```bash
+# 激活虚拟环境
+source venv/bin/activate
+
+# 运行pipeline建立索引（一键完成所有indexing）
+python run_pipelines.py
+
+# 或者分别运行各个pipeline
+python -m src.services.log_pipeline
+python -m src.services.knowledge_pipeline
+python -m src.services.knowledge_graph_pipeline
+```
+
+#### 🧪 RAG功能测试
+```bash
+# 基础功能测试
+python test_rag_simple.py          # 测试RAG基础连接和功能
+python test_agent_simple.py        # 测试Agent-RAG集成
+
+# 完整集成测试
+python test_complete_rca.py        # 端到端RCA流程测试
+python test_api_rca.py             # API接口RCA功能测试
+```
+
+#### 📊 预期测试结果
+- **RAG数据状态**: 234条向量索引 + 27个知识图谱节点
+- **搜索功能**: 支持语义搜索、全文搜索、混合搜索
+- **Agent能力**: 症状识别、根因推理、解决方案生成
+- **RCA场景**: 支持CPU过载、数据库连接、磁盘IO等故障分析
+
 ### 系统访问和使用方法
 
 启动成功后，您可以通过以下方式与系统交互：
@@ -191,8 +241,11 @@ python chat_cli.py
 |------|------|------|
 | 🏗️ **系统设计文档** | 架构设计、数据库设计、Agent设计 | [system-design.md](docs/system-design.md) |
 | 🎯 **系统交互流程** | 架构图、时序图、API交互流程 | [system-interaction-flow.md](docs/system-interaction-flow.md) |
+| 🔬 **实验环境设置** | AIOps根因分析实验环境完整文档 | [experiment_setup_1.md](docs/experiment_setup_1.md) |
 | 🖥️ **Web UI使用指南** | Web界面详细使用说明 | [web-ui-guide.md](docs/web-ui-guide.md) |
 | 📖 **API参考文档** | 完整的API接口文档 | [api-reference.md](docs/api-reference.md) |
+| 🔍 **RAG Pipeline架构** | RAG系统完整架构和实现详解 | [rag_pipeline_architecture.md](docs/rag_pipeline_architecture.md) |
+| 🤖 **Agent RAG集成验证** | Agent与RAG集成的验证方法和测试结果 | [agent_rag_validation.md](docs/agent_rag_validation.md) |
 
 #### 🧪 快速测试示例
 
@@ -375,7 +428,36 @@ curl -X POST "http://localhost:8888/knowledge/extract?source=test" \
 
 ## 数据源配置
 
-### 1. Wiki文档 (`data/wiki/`)
+### 1. 🔬 实验数据 (`data/`)
+
+#### RCA训练数据 (`data/rca/`)
+用于AIOps根因分析训练的结构化incident数据：
+```json
+{
+  "incident_id": "INC-2025-001",
+  "title": "Service B CPU Overload Causing Chain Latency",
+  "root_cause": {"primary": "CPU overload due to inefficient algorithm"},
+  "analysis_steps": ["症状识别", "影响范围", "根因定位"],
+  "impact_metrics": {"requests_affected": 45000}
+}
+```
+
+#### 故障日志 (`data/logs/`)
+时序故障日志，包含故障前后1小时的完整日志：
+```
+2025-08-20T14:31:45.456Z [ERROR] service-b: CPU usage: 95%, GC time: 25%
+2025-08-20T14:35:07.234Z [CRITICAL] service-b: OutOfMemoryError in processing pool
+```
+
+#### 架构知识库 (`data/wiki/`)
+包含系统架构文档和Neo4j知识图谱：
+```cypher
+CREATE (a:Service {name: 'service-a', type: 'api-gateway'})
+CREATE (b:Service {name: 'service-b', type: 'business-logic'})
+CREATE (a)-[:CALLS {timeout_ms: 5000}]->(b)
+```
+
+### 2. Wiki文档 (`data/wiki/`)
 存储运维知识文档，支持Markdown和JSON格式
 ```json
 {
@@ -387,7 +469,7 @@ curl -X POST "http://localhost:8888/knowledge/extract?source=test" \
 }
 ```
 
-### 2. GitLab数据 (`data/gitlab/`)
+### 3. GitLab数据 (`data/gitlab/`)
 包含代码变更信息，用于关联代码变更与故障
 ```json
 {
@@ -398,7 +480,7 @@ curl -X POST "http://localhost:8888/knowledge/extract?source=test" \
 }
 ```
 
-### 3. Jira工单 (`data/jira/`)
+### 4. Jira工单 (`data/jira/`)
 事件和故障工单信息
 ```json
 {
@@ -408,12 +490,6 @@ curl -X POST "http://localhost:8888/knowledge/extract?source=test" \
   "priority": "高",
   "components": ["web-server"]
 }
-```
-
-### 4. 系统日志 (`data/logs/`)
-结构化的系统日志数据
-```
-2024-08-22 08:30:15 [ERROR] web-server-01: CPU usage 85%
 ```
 
 ## API文档
