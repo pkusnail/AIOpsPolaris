@@ -192,7 +192,7 @@ sequenceDiagram
     Logger-->>RCA: 日志确认
     
     %% 第一阶段: NER实体识别
-    rect rgb(245, 180, 0)
+    rect rgb(55, 71, 79)
         Note over RCA,NER: <b>阶段1: NER实体识别</b>
         RCA->>NER: extract_entities(query)
         NER->>NER: 正则匹配服务名和指标
@@ -201,7 +201,7 @@ sequenceDiagram
     end
     
     %% 第二阶段: 并行数据检索
-    rect rgb(76, 175, 80)
+    rect rgb(27, 94, 32)
         Note over RCA,DB: <b>阶段2: 并行数据检索</b>
         
         par 混合搜索
@@ -232,7 +232,7 @@ sequenceDiagram
     end
     
     %% 第三阶段: Agent推理分析
-    rect rgb(156, 39, 176)
+    rect rgb(74, 20, 140)
         Note over RCA,Graph: <b>阶段3: Agent推理分析</b>
         RCA->>Graph: perform_rca_analysis(query, evidence, entities)
         Note over Graph: 基于真实证据进行推理
@@ -247,7 +247,7 @@ sequenceDiagram
     end
     
     %% 第四阶段: 结果整合
-    rect rgb(33, 150, 243)
+    rect rgb(13, 71, 161)
         Note over RCA,Logger: <b>阶段4: 结果整合和格式化</b>
         RCA->>RCA: 构建证据链
         RCA->>RCA: 格式化拓扑关系
