@@ -213,6 +213,21 @@
             white-space: pre-wrap;
             word-wrap: break-word;
         }
+        
+        /* 加载动画 */
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -235,6 +250,7 @@
                 >
                 <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
             </div>
+            
         </div>
         
         <div class="status-bar">
@@ -357,49 +373,212 @@
             messageInput.value = '';
             sendBtn.disabled = true;
             messageInput.disabled = true;
-            updateStatus('正在处理您的请求...', 'loading');
+            
+            // 默认使用Multi-Agent模式
+            currentTaskId = null; // 重置当前任务ID
+            return await sendMultiAgentMessage(message);
+            
+            // 创建进度显示元素
+            const progressDiv = document.createElement('div');
+            progressDiv.className = 'message bot-message';
+            progressDiv.innerHTML = `
+                <strong>🤖 AIOps助手:</strong><br>
+                <div class="bot-content">
+                    <div id="progress-container" style="margin: 10px 0;">
+                        <div style="background: #f0f0f0; border-radius: 10px; padding: 15px;">
+                            <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                <div class="spinner" style="margin-right: 10px;"></div>
+                                <span id="current-stage">正在启动RCA分析...</span>
+                            </div>
+                            <div id="progress-bar" style="background: #e0e0e0; height: 8px; border-radius: 4px; margin: 10px 0;">
+                                <div id="progress-fill" style="background: #667eea; height: 100%; width: 0%; border-radius: 4px; transition: width 0.3s;"></div>
+                            </div>
+                            <div id="progress-text">0% 完成</div>
+                            <div id="stages-info" style="margin-top: 10px; font-size: 0.85em; color: #666;">
+                                <div>🔄 NER实体识别 - 等待中</div>
+                                <div>🔄 混合搜索 - 等待中</div>
+                                <div>🔄 拓扑查询 - 等待中</div>
+                                <div>🔄 Agent推理 - 等待中</div>
+                                <div>🔄 结果格式化 - 等待中</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            messagesContainer.appendChild(progressDiv);
 
             try {
-                const response = await apiRequest(`${API_BASE_URL}/chat`, {
+                // 首先启动流式任务
+                updateStatus('启动RCA分析任务...', 'loading');
+                
+                const streamResponse = await apiRequest(`${API_BASE_URL}/chat/stream`, {
                     method: 'POST',
                     body: JSON.stringify({
                         message: message,
-                        session_id: userId
+                        user_id: userId,
+                        temperature: 0.7
                     })
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                if (!streamResponse.ok) {
+                    throw new Error(`HTTP ${streamResponse.status}: ${streamResponse.statusText}`);
                 }
 
-                const result = await response.json();
+                const streamResult = await streamResponse.json();
+                const taskId = streamResult.task_id;
                 
-                const botResponse = result.response || '系统处理完成';
-                addMessage(botResponse);
+                updateStatus(`任务已启动 (ID: ${taskId.slice(-8)}), 正在分析...`, 'loading');
                 
-                // 显示更详细的状态信息
-                let statusMsg = '处理完成';
-                if (result.processing_time) {
-                    statusMsg += ` (${result.processing_time.toFixed(2)}s)`;
-                }
-                if (result.analysis_type) {
-                    statusMsg += ` [${result.analysis_type}]`;
-                }
-                if (result.evidence_count) {
-                    statusMsg += ` - 找到${result.evidence_count}条证据`;
-                }
-                
-                updateStatus(statusMsg, 'success');
+                // 开始轮询任务状态
+                await pollTaskStatus(taskId, progressDiv);
                 
             } catch (error) {
-                console.error('Chat request failed:', error);
-                addMessage(`连接错误: ${error.message}. 请检查API服务是否正在运行 (http://localhost:8000)`, false);
-                updateStatus('连接失败', 'error');
+                console.error('Streaming chat request failed:', error);
+                
+                // 移除进度显示，显示错误信息
+                messagesContainer.removeChild(progressDiv);
+                addMessage(`连接错误: ${error.message}. 正在尝试使用传统方式...`, false);
+                
+                // 回退到传统聊天方式
+                try {
+                    updateStatus('使用传统方式处理...', 'loading');
+                    const fallbackResponse = await apiRequest(`${API_BASE_URL}/chat`, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            message: message,
+                            user_id: userId
+                        })
+                    });
+                    
+                    const fallbackResult = await fallbackResponse.json();
+                    addMessage(fallbackResult.response || '系统处理完成');
+                    updateStatus('处理完成 (传统模式)', 'success');
+                    
+                } catch (fallbackError) {
+                    addMessage(`系统错误: ${fallbackError.message}. 请检查API服务是否正在运行`, false);
+                    updateStatus('处理失败', 'error');
+                }
+                
             } finally {
                 sendBtn.disabled = false;
                 messageInput.disabled = false;
                 messageInput.focus();
             }
+        }
+
+        async function pollTaskStatus(taskId, progressDiv) {
+            const maxPolls = 120; // 最多轮询2分钟 (120 * 1000ms)
+            let pollCount = 0;
+            
+            const poll = async () => {
+                try {
+                    const statusResponse = await apiRequest(`${API_BASE_URL}/chat/task_status/${taskId}`);
+                    
+                    if (!statusResponse.ok) {
+                        throw new Error(`Status check failed: ${statusResponse.status}`);
+                    }
+                    
+                    const taskStatus = await statusResponse.json();
+                    updateProgressDisplay(taskStatus, progressDiv);
+                    
+                    if (taskStatus.status === 'completed') {
+                        // 任务完成，显示最终结果
+                        messagesContainer.removeChild(progressDiv);
+                        
+                        const finalResult = taskStatus.final_result;
+                        if (finalResult && finalResult.response) {
+                            addMessage(finalResult.response);
+                            
+                            // 显示分析详情
+                            if (finalResult.evidence_files && finalResult.evidence_files.length > 0) {
+                                let evidenceMsg = '\n\n📋 **证据文件**:\n';
+                                finalResult.evidence_files.forEach(file => {
+                                    evidenceMsg += `- ${file.file_name} (行 ${file.line_number})\n`;
+                                });
+                                addMessage(evidenceMsg);
+                            }
+                            
+                            // 显示拓扑信息
+                            if (finalResult.topology_data && finalResult.topology_data.affected_services) {
+                                let topoMsg = '\n\n🕸️ **服务拓扑**:\n';
+                                topoMsg += `影响服务: ${finalResult.topology_data.affected_services.join(', ')}\n`;
+                                addMessage(topoMsg);
+                            }
+                        } else {
+                            addMessage('分析完成，但未返回详细结果');
+                        }
+                        
+                        updateStatus(`分析完成 (${taskStatus.total_duration?.toFixed(2) || 'N/A'}s)`, 'success');
+                        return;
+                        
+                    } else if (taskStatus.status === 'failed') {
+                        // 任务失败
+                        messagesContainer.removeChild(progressDiv);
+                        addMessage(`分析失败: ${taskStatus.error || '未知错误'}`);
+                        updateStatus('分析失败', 'error');
+                        return;
+                        
+                    } else if (taskStatus.status === 'processing') {
+                        // 继续轮询
+                        pollCount++;
+                        if (pollCount < maxPolls) {
+                            setTimeout(poll, 500); // 每500ms轮询一次
+                        } else {
+                            // 超时
+                            messagesContainer.removeChild(progressDiv);
+                            addMessage('分析超时，请稍后重试');
+                            updateStatus('分析超时', 'error');
+                        }
+                    }
+                    
+                } catch (error) {
+                    console.error('Polling failed:', error);
+                    messagesContainer.removeChild(progressDiv);
+                    addMessage(`状态检查失败: ${error.message}`);
+                    updateStatus('状态检查失败', 'error');
+                }
+            };
+            
+            // 开始轮询
+            setTimeout(poll, 500);
+        }
+
+        function updateProgressDisplay(taskStatus, progressDiv) {
+            const progressFill = progressDiv.querySelector('#progress-fill');
+            const progressText = progressDiv.querySelector('#progress-text');
+            const currentStage = progressDiv.querySelector('#current-stage');
+            const stagesInfo = progressDiv.querySelector('#stages-info');
+            
+            // 更新进度条
+            const progress = Math.round((taskStatus.progress || 0) * 100);
+            progressFill.style.width = `${progress}%`;
+            progressText.textContent = `${progress}% 完成`;
+            
+            // 更新当前阶段
+            currentStage.textContent = taskStatus.current_stage_detail || taskStatus.current_stage || '处理中...';
+            
+            // 更新各阶段状态
+            if (taskStatus.stages_completed && stagesInfo) {
+                const stageElements = stagesInfo.children;
+                taskStatus.stages_completed.forEach((stage, index) => {
+                    if (stageElements[index]) {
+                        let emoji = '🔄';
+                        if (stage.status === 'completed') emoji = '✅';
+                        else if (stage.status === 'failed') emoji = '❌';
+                        else if (stage.status === 'in_progress') emoji = '⏳';
+                        
+                        let duration = '';
+                        if (stage.duration_ms) {
+                            duration = ` (${stage.duration_ms}ms)`;
+                        }
+                        
+                        stageElements[index].textContent = `${emoji} ${stage.stage}${duration}`;
+                    }
+                });
+            }
+            
+            // 更新状态栏
+            updateStatus(`${taskStatus.current_stage} (${progress}%)`, 'loading');
         }
 
         async function checkHealth() {
@@ -495,6 +674,642 @@
         function clearChat() {
             messagesContainer.innerHTML = '';
             updateStatus('对话已清空', 'success');
+        }
+        
+        // Multi-Agent相关函数
+        async function sendMultiAgentMessage(message) {
+            // 创建Multi-Agent进度显示元素
+            const progressDiv = document.createElement('div');
+            progressDiv.className = 'message bot-message';
+            progressDiv.innerHTML = createMultiAgentProgressHTML();
+            messagesContainer.appendChild(progressDiv);
+            
+            try {
+                updateStatus('启动Multi-Agent RCA分析...', 'loading');
+                
+                // 启动multi-agent任务
+                const streamResponse = await apiRequest(`${API_BASE_URL}/chat/multi_agent`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        message: message,
+                        user_id: userId
+                    })
+                });
+                
+                if (!streamResponse.ok) {
+                    throw new Error(`HTTP ${streamResponse.status}: ${streamResponse.statusText}`);
+                }
+                
+                const streamResult = await streamResponse.json();
+                
+                if (streamResult.success) {
+                    currentTaskId = streamResult.task_id; // 设置当前任务ID
+                    // 开始轮询Multi-Agent状态
+                    await pollMultiAgentStatus(streamResult.task_id, progressDiv);
+                } else {
+                    throw new Error('Failed to start multi-agent task');
+                }
+                
+            } catch (error) {
+                console.error('Multi-Agent连接错误:', error);
+                updateStatus('Multi-Agent连接失败，使用传统方式...', 'warning');
+                
+                // 回退到传统聊天
+                progressDiv.remove();
+                await sendTraditionalMessage(message);
+            }
+        }
+        
+        function createMultiAgentProgressHTML() {
+            return `
+                <strong>🤖 Multi-Agent分析系统:</strong><br>
+                <div class="bot-content">
+                    <div id="ma-progress-container" style="margin: 10px 0;">
+                        <div style="background: #f0f0f0; border-radius: 10px; padding: 15px;">
+                            <!-- 整体进度 -->
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+                                <div style="display: flex; align-items: center;">
+                                    <div class="spinner" style="margin-right: 10px;"></div>
+                                    <span id="ma-current-phase">规划阶段</span>
+                                </div>
+                                <button id="interrupt-btn" onclick="interruptTask()" 
+                                        style="padding: 5px 12px; background: #ff6b6b; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                    中断任务
+                                </button>
+                            </div>
+                            
+                            <!-- 整体进度条 -->
+                            <div id="ma-progress-bar" style="background: #e0e0e0; height: 12px; border-radius: 6px; margin: 10px 0;">
+                                <div id="ma-progress-fill" style="background: #667eea; height: 100%; width: 0%; border-radius: 6px; transition: width 0.3s;"></div>
+                            </div>
+                            <div id="ma-progress-text">0% 完成</div>
+                            
+                            <!-- Planner规划展示 -->
+                            <div id="planning-section" style="margin: 15px 0; padding: 10px; background: #e8f2ff; border-radius: 8px;">
+                                <h4 style="margin: 0 0 10px 0; color: #2c5282;">📋 Planner Agent规划</h4>
+                                <div id="planning-content">等待Planner制定执行计划...</div>
+                            </div>
+                            
+                            <!-- Agents状态 -->
+                            <div id="agents-section" style="margin: 15px 0;">
+                                <h4 style="margin: 0 0 10px 0; color: #2c5282;">🤖 Agents协作状态</h4>
+                                <div id="agents-status">
+                                    <div class="agent-status" data-agent="planner">🧠 Planner Agent: <span class="status">等待中</span></div>
+                                    <div class="agent-status" data-agent="knowledge">📚 Knowledge Agent: <span class="status">等待中</span></div>
+                                    <div class="agent-status" data-agent="reasoning">🔍 Reasoning Agent: <span class="status">等待中</span></div>
+                                    <div class="agent-status" data-agent="executor">⚡ Executor Agent: <span class="status">等待中</span></div>
+                                </div>
+                            </div>
+                            
+                            <!-- 中间结论 -->
+                            <div id="conclusions-section" style="margin: 15px 0; display: none;">
+                                <h4 style="margin: 0 0 10px 0; color: #2c5282;">📝 分析结论</h4>
+                                <div id="conclusions-content"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function pollMultiAgentStatus(taskId, progressDiv) {
+            currentTaskId = taskId; // 设置全局任务ID用于中断
+            const maxPolls = 240; // 2分钟超时
+            
+            for (let i = 0; i < maxPolls; i++) {
+                try {
+                    const statusResponse = await apiRequest(`${API_BASE_URL}/chat/multi_agent_status/${currentTaskId}`);
+                    
+                    if (!statusResponse.ok) {
+                        throw new Error(`Status check failed: ${statusResponse.status}`);
+                    }
+                    
+                    const status = await statusResponse.json();
+                    updateMultiAgentDisplay(status);
+                    
+                    if (status.status === 'completed') {
+                        updateStatus('Multi-Agent分析完成', 'success');
+                        displayMultiAgentResult(status, progressDiv);
+                        break;
+                    } else if (status.status === 'failed') {
+                        updateStatus('Multi-Agent分析失败', 'error');
+                        displayMultiAgentError(status, progressDiv);
+                        break;
+                    } else if (status.status === 'interrupted') {
+                        updateStatus('任务已被中断', 'warning');
+                        displayMultiAgentInterrupted(status, progressDiv);
+                        break;
+                    }
+                    
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                } catch (error) {
+                    console.error('轮询错误:', error);
+                    updateStatus('状态查询失败，回退到传统模式', 'error');
+                    progressDiv.remove();
+                    await sendTraditionalMessage(messageInput.value || '分析请求');
+                    break;
+                }
+            }
+            
+            // 恢复输入控制
+            sendBtn.disabled = false;
+            messageInput.disabled = false;
+        }
+        
+        function updateMultiAgentDisplay(status) {
+            // 更新整体进度
+            const progressFill = document.getElementById('ma-progress-fill');
+            const progressText = document.getElementById('ma-progress-text');
+            const currentPhase = document.getElementById('ma-current-phase');
+            
+            if (progressFill) {
+                progressFill.style.width = `${status.overall_progress * 100}%`;
+            }
+            if (progressText) {
+                progressText.textContent = `${Math.round(status.overall_progress * 100)}% 完成`;
+            }
+            if (currentPhase) {
+                currentPhase.textContent = status.current_phase === 'planning' ? '规划阶段' : 
+                                         status.current_phase === 'execution' ? '执行阶段' : '完成阶段';
+            }
+            
+            // 更新Planner规划内容
+            updatePlanningDisplay(status.planning_sessions);
+            
+            // 更新Agents状态
+            updateAgentsDisplay(status.agents);
+            
+            // 更新中间结论
+            updateConclusionsDisplay(status.intermediate_conclusions);
+        }
+        
+        function updatePlanningDisplay(planningSessions) {
+            const planningContent = document.getElementById('planning-content');
+            if (!planningContent || !planningSessions || planningSessions.length === 0) return;
+            
+            const latestSession = planningSessions[planningSessions.length - 1];
+            
+            if (latestSession.status === 'planning') {
+                planningContent.innerHTML = '🤔 Planner正在分析问题，制定执行策略...';
+            } else if (latestSession.status === 'completed') {
+                let planHTML = `<div style="font-size: 0.9em;">`;
+                planHTML += `<div style="margin-bottom: 8px;"><strong>推理过程:</strong></div>`;
+                planHTML += `<div style="background: white; padding: 8px; border-radius: 4px; margin-bottom: 10px;">${latestSession.reasoning || '规划完成'}</div>`;
+                
+                if (latestSession.steps && latestSession.steps.length > 0) {
+                    planHTML += `<div style="margin-bottom: 8px;"><strong>执行步骤:</strong></div>`;
+                    latestSession.steps.forEach((step, index) => {
+                        const statusIcon = step.status === 'completed' ? '✅' : 
+                                         step.status === 'executing' ? '🔄' : 
+                                         step.status === 'failed' ? '❌' : '⏳';
+                        planHTML += `<div style="margin: 4px 0; padding: 4px 8px; background: white; border-radius: 4px;">`;
+                        planHTML += `${statusIcon} ${index + 1}. ${step.step_name} (${step.assigned_agent})`;
+                        if (step.description) {
+                            planHTML += `<br><small style="color: #666;">${step.description}</small>`;
+                        }
+                        planHTML += `</div>`;
+                    });
+                }
+                planHTML += `</div>`;
+                planningContent.innerHTML = planHTML;
+            }
+        }
+        
+        function updateAgentsDisplay(agents) {
+            for (const [agentId, agentData] of Object.entries(agents)) {
+                const agentElement = document.querySelector(`[data-agent="${agentId}"] .status`);
+                if (!agentElement) continue;
+                
+                const statusMap = {
+                    'waiting': '⏳ 等待中',
+                    'working': '🔄 工作中',
+                    'done': '✅ 完成',
+                    'failed': '❌ 失败',
+                    'interrupted': '⏸️ 中断'
+                };
+                
+                let statusText = statusMap[agentData.status] || agentData.status;
+                if (agentData.current_action && agentData.status === 'working') {
+                    statusText += ` - ${agentData.current_action}`;
+                }
+                
+                agentElement.innerHTML = statusText;
+                
+                // 更新颜色
+                const agentDiv = agentElement.parentElement;
+                agentDiv.style.color = agentData.status === 'done' ? '#059669' : 
+                                     agentData.status === 'failed' ? '#dc2626' : 
+                                     agentData.status === 'working' ? '#2563eb' : '#6b7280';
+            }
+        }
+        
+        function updateConclusionsDisplay(conclusions) {
+            const conclusionsSection = document.getElementById('conclusions-section');
+            const conclusionsContent = document.getElementById('conclusions-content');
+            
+            if (!conclusions || conclusions.length === 0) {
+                conclusionsSection.style.display = 'none';
+                return;
+            }
+            
+            conclusionsSection.style.display = 'block';
+            
+            let conclusionsHTML = '';
+            conclusions.forEach((conclusion, index) => {
+                conclusionsHTML += `
+                    <div style="margin: 8px 0; padding: 10px; background: white; border-radius: 6px; border-left: 4px solid #10b981;">
+                        <div style="font-weight: bold; color: #065f46; margin-bottom: 4px;">
+                            ${conclusion.agent_name} (置信度: ${Math.round(conclusion.confidence * 100)}%)
+                        </div>
+                        <div style="font-size: 0.9em;">
+                            ${conclusion.conclusion}
+                        </div>
+                        <div style="font-size: 0.8em; color: #6b7280; margin-top: 4px;">
+                            ${new Date(conclusion.timestamp).toLocaleTimeString()}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            conclusionsContent.innerHTML = conclusionsHTML;
+        }
+        
+        let currentTaskId = null;
+        
+        function interruptTask() {
+            if (!currentTaskId) return;
+            
+            if (confirm('确定要中断当前的Multi-Agent分析任务吗？')) {
+                fetch(`${API_BASE_URL}/chat/interrupt/${currentTaskId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason: '用户主动中断' })
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        updateStatus('任务已中断', 'warning');
+                    } else {
+                        updateStatus('中断失败', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('中断请求失败:', error);
+                    updateStatus('中断请求失败', 'error');
+                });
+            }
+        }
+        
+        function displayMultiAgentResult(status, progressDiv) {
+            const finalResult = status.final_result;
+            const conclusions = status.intermediate_conclusions;
+            
+            let resultHTML = `
+                <strong>🎯 Multi-Agent分析完成</strong><br>
+                <div class="bot-content">
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 15px; margin: 10px 0;">
+                        <!-- 执行摘要 -->
+                        <div style="margin-bottom: 20px;">
+                            <strong>📊 执行摘要:</strong><br>
+                            涉及 ${finalResult.total_agents_involved} 个Agent，耗时 ${finalResult.execution_duration.toFixed(1)}秒<br>
+                            整体置信度: ${Math.round(finalResult.confidence_score * 100)}%
+                        </div>
+                        
+                        <!-- Planner规划过程 -->
+                        <div style="margin-bottom: 20px;">
+                            <strong>📋 Planner规划过程:</strong><br>
+                            <div style="background: #e8f2ff; padding: 12px; border-radius: 6px; margin-top: 8px; font-size: 0.9em;">
+                                ${status.planning_sessions[0].reasoning.replace(/\n/g, '<br>')}
+                            </div>
+                        </div>
+                        
+                        <!-- 各Agent详细结论 -->
+                        <div style="margin-bottom: 20px;">
+                            <strong>🤖 各Agent详细分析:</strong><br>
+                            <div style="margin-top: 10px;">
+            `;
+            
+            // 按Agent分组显示结论
+            const agentConclusions = {};
+            conclusions.forEach(conclusion => {
+                if (!agentConclusions[conclusion.agent_id]) {
+                    agentConclusions[conclusion.agent_id] = [];
+                }
+                agentConclusions[conclusion.agent_id].push(conclusion);
+            });
+            
+            const agentNames = {
+                'knowledge': '📚 Knowledge Agent',
+                'reasoning': '🔍 Reasoning Agent', 
+                'executor': '⚡ Executor Agent',
+                'planner': '🧠 Planner Agent'
+            };
+            
+            for (const [agentId, agentConcs] of Object.entries(agentConclusions)) {
+                resultHTML += `
+                    <div style="margin: 10px 0; padding: 12px; background: white; border-radius: 6px; border-left: 4px solid #3b82f6;">
+                        <div style="font-weight: bold; color: #1e40af; margin-bottom: 8px;">
+                            ${agentNames[agentId] || agentId}
+                        </div>
+                `;
+                
+                agentConcs.forEach(conclusion => {
+                    resultHTML += `
+                        <div style="margin: 6px 0; padding: 8px; background: #f8fafc; border-radius: 4px;">
+                            <div style="font-size: 0.9em; margin-bottom: 4px;">
+                                <strong>${conclusion.step_id}:</strong> ${conclusion.conclusion}
+                            </div>
+                            <div style="font-size: 0.8em; color: #6b7280;">
+                                置信度: ${Math.round(conclusion.confidence * 100)}% | ${new Date(conclusion.timestamp).toLocaleTimeString()}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                resultHTML += `</div>`;
+            }
+            
+            resultHTML += `
+                            </div>
+                        </div>
+                        
+                        <!-- 最终分析结果 -->
+                        <div style="margin-bottom: 20px;">
+                            <strong>🔍 综合分析结果:</strong><br>
+                            <div style="background: white; padding: 12px; border-radius: 6px; margin-top: 8px; border-left: 4px solid #10b981;">
+                                ${finalResult.response.replace(/\n/g, '<br>')}
+                            </div>
+                        </div>
+                        
+                        <!-- 解决方案建议 -->
+                        <div style="margin-bottom: 15px;">
+                            <strong>💡 解决方案建议:</strong><br>
+                            <div style="background: #fef3cd; padding: 12px; border-radius: 6px; margin-top: 8px; border-left: 4px solid #f59e0b;">
+            `;
+            
+            // 从Executor Agent的结论中提取解决方案
+            const executorConclusions = conclusions.filter(c => c.agent_id === 'executor');
+            if (executorConclusions.length > 0) {
+                const solutions = executorConclusions[0].conclusion;
+                resultHTML += solutions.replace(/\n/g, '<br>');
+            } else {
+                resultHTML += '基于分析结果，建议监控相关服务状态并进行性能优化。';
+            }
+            
+            resultHTML += `
+                            </div>
+                        </div>
+                        
+                        <!-- 证据详情 -->
+                        <div style="margin-bottom: 20px;">
+                            <strong>📋 证据收集详情:</strong><br>
+                            <div style="background: #f1f5f9; padding: 12px; border-radius: 6px; margin-top: 8px; font-size: 0.9em;">
+            `;
+            
+            // 显示详细证据信息
+            if (finalResult.detailed_evidence) {
+                const evidence = finalResult.detailed_evidence;
+                
+                // 显示RAG搜索结果
+                if (evidence.rag_evidence && evidence.rag_evidence.length > 0) {
+                    resultHTML += `
+                        <div style="margin: 10px 0; padding: 10px; background: white; border-radius: 4px; border-left: 3px solid #059669;">
+                            <strong>🔍 RAG搜索证据 (${evidence.rag_evidence.length}条):</strong><br>
+                    `;
+                    
+                    evidence.rag_evidence.slice(0, 5).forEach((item, index) => {
+                        const content = item.content || '';
+                        const sourceType = item.source_type || 'unknown';
+                        const logFile = item.log_file || 'unknown_file';
+                        const serviceName = item.service_name || 'unknown';
+                        const timestamp = item.timestamp || '';
+                        
+                        // 根据source_type确定显示名称和图标
+                        let displayName = logFile;
+                        let icon = '📄';
+                        if (sourceType === 'wiki') {
+                            displayName = 'Wiki知识库';
+                            icon = '📚';
+                        } else if (sourceType === 'jira') {
+                            displayName = 'JIRA工单系统';
+                            icon = '🎫';
+                        } else if (sourceType === 'gitlab') {
+                            displayName = 'GitLab项目';
+                            icon = '💻';
+                        } else if (sourceType === 'logs') {
+                            displayName = logFile;
+                            icon = '📄';
+                        }
+                        
+                        resultHTML += `
+                            <div style="margin: 8px 0; padding: 8px; background: #f8fafc; border-radius: 3px; border-left: 2px solid #10b981;">
+                                <div style="font-size: 0.85em; margin-bottom: 4px; font-weight: bold;">
+                                    ${icon} ${displayName} 
+                                    ${serviceName !== 'unknown' ? `| 服务: ${serviceName}` : ''}
+                                    <span style="font-size: 0.75em; color: #6b7280; font-weight: normal;">(${sourceType})</span>
+                                </div>
+                                <div style="font-size: 0.8em; color: #374151; margin-bottom: 4px;">
+                                    内容预览: ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}
+                                </div>
+                                <div style="font-size: 0.75em; color: #6b7280;">
+                                    时间: ${timestamp}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    if (evidence.rag_evidence.length > 5) {
+                        resultHTML += `<div style="font-size: 0.8em; color: #6b7280; margin-top: 8px;">... 还有 ${evidence.rag_evidence.length - 5} 条证据</div>`;
+                    }
+                    
+                    resultHTML += `</div>`;
+                }
+                
+                // 显示Neo4j拓扑信息
+                if (evidence.topology_data && evidence.topology_data.relationships) {
+                    const relationships = evidence.topology_data.relationships;
+                    resultHTML += `
+                        <div style="margin: 10px 0; padding: 10px; background: white; border-radius: 4px; border-left: 3px solid #7c3aed;">
+                            <strong>🗂️ 服务拓扑关系 (${relationships.length}个):</strong><br>
+                    `;
+                    
+                    const uniqueServices = new Set();
+                    relationships.forEach(rel => {
+                        if (rel.from_service) uniqueServices.add(rel.from_service);
+                        if (rel.to_service) uniqueServices.add(rel.to_service);
+                    });
+                    
+                    resultHTML += `
+                        <div style="margin: 8px 0; padding: 8px; background: #f8fafc; border-radius: 3px;">
+                            <div style="font-size: 0.85em; margin-bottom: 4px; font-weight: bold;">
+                                🏗️ 涉及服务: ${Array.from(uniqueServices).join(', ')}
+                            </div>
+                    `;
+                    
+                    relationships.slice(0, 5).forEach(rel => {
+                        resultHTML += `
+                            <div style="font-size: 0.8em; color: #374151; margin: 4px 0; padding-left: 16px;">
+                                • ${rel.from_service || 'unknown'} → ${rel.to_service || 'unknown'} 
+                                ${rel.relationship_type ? `(${rel.relationship_type})` : ''}
+                            </div>
+                        `;
+                    });
+                    
+                    if (relationships.length > 5) {
+                        resultHTML += `<div style="font-size: 0.8em; color: #6b7280; margin-top: 8px;">... 还有 ${relationships.length - 5} 个依赖关系</div>`;
+                    }
+                    
+                    resultHTML += `</div></div>`;
+                }
+                
+                // 显示数据源分析详情
+                if (evidence.log_files_analyzed && evidence.log_files_analyzed.length > 0) {
+                    resultHTML += `
+                        <div style="margin: 10px 0; padding: 10px; background: white; border-radius: 4px; border-left: 3px solid #ea580c;">
+                            <strong>📋 数据源分析 (${evidence.log_files_analyzed.length}个数据源):</strong><br>
+                    `;
+                    
+                    evidence.log_files_analyzed.forEach(dataSource => {
+                        // 根据数据类型选择图标
+                        let icon = '📄';
+                        if (dataSource.data_type === '知识文档') icon = '📚';
+                        else if (dataSource.data_type === '工单记录') icon = '🎫';
+                        else if (dataSource.data_type === '代码仓库') icon = '💻';
+                        else if (dataSource.data_type === '日志文件') icon = '📄';
+                        
+                        resultHTML += `
+                            <div style="margin: 6px 0; padding: 6px; background: #f8fafc; border-radius: 3px;">
+                                <div style="font-size: 0.85em; font-weight: bold; margin-bottom: 2px;">
+                                    ${icon} ${dataSource.file_path} <span style="font-size: 0.75em; color: #6b7280; font-weight: normal;">(${dataSource.data_type})</span>
+                                </div>
+                                <div style="font-size: 0.8em; color: #6b7280; margin-bottom: 2px;">
+                                    服务: ${dataSource.service}${dataSource.machine !== 'unknown' ? ` | 机器: ${dataSource.machine}` : ''}
+                                </div>
+                                <div style="font-size: 0.75em; color: #9ca3af;">
+                                    时间: ${dataSource.timestamp} | 内容: ${dataSource.content_preview}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    resultHTML += `</div>`;
+                }
+                
+                resultHTML += `<div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e5e7eb; font-size: 0.9em; color: #374151;">${evidence.evidence_summary}</div>`;
+            } else {
+                // 从结论中提取证据信息（兼容旧格式）
+                const evidenceConclusions = conclusions.filter(c => c.agent_id === 'knowledge');
+                if (evidenceConclusions.length > 0) {
+                    evidenceConclusions.forEach(evidence => {
+                        resultHTML += `
+                            <div style="margin: 6px 0;">
+                                <strong>${evidence.step_id}:</strong> ${evidence.conclusion}
+                            </div>
+                        `;
+                    });
+                } else {
+                    resultHTML += `<div>已完成实体识别、证据搜索和拓扑分析</div>`;
+                }
+            }
+            
+            resultHTML += `
+                            </div>
+                        </div>
+                        
+                        <!-- 推理过程详情 -->
+                        <div style="margin-bottom: 20px;">
+                            <strong>🧠 推理分析详情:</strong><br>
+                            <div style="background: #fef7ff; padding: 12px; border-radius: 6px; margin-top: 8px; font-size: 0.9em; border-left: 4px solid #a855f7;">
+            `;
+            
+            // 从结论中提取推理信息
+            const reasoningConclusions = conclusions.filter(c => c.agent_id === 'reasoning');
+            if (reasoningConclusions.length > 0) {
+                reasoningConclusions.forEach(reasoning => {
+                    resultHTML += `
+                        <div style="margin: 8px 0; padding: 8px; background: white; border-radius: 4px;">
+                            <strong>分析方法:</strong> 多维度根因分析<br>
+                            <strong>推理结论:</strong> ${reasoning.conclusion}<br>
+                            <strong>置信度:</strong> ${Math.round(reasoning.confidence * 100)}%
+                        </div>
+                    `;
+                });
+            } else {
+                resultHTML += `<div>已完成基于证据和拓扑信息的综合推理分析</div>`;
+            }
+            
+            resultHTML += `
+                            </div>
+                        </div>
+                        
+                        <div style="font-size: 0.85em; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 10px;">
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>分析完成时间: ${new Date().toLocaleString()}</span>
+                                <span>Multi-Agent协作模式 | AIOps Polaris v2.0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            progressDiv.innerHTML = resultHTML;
+        }
+        
+        function displayMultiAgentError(status, progressDiv) {
+            progressDiv.innerHTML = `
+                <strong>❌ Multi-Agent分析失败</strong><br>
+                <div class="bot-content">
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 15px; margin: 10px 0;">
+                        错误信息: ${status.error || '未知错误'}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function displayMultiAgentInterrupted(status, progressDiv) {
+            progressDiv.innerHTML = `
+                <strong>⏸️ 任务已中断</strong><br>
+                <div class="bot-content">
+                    <div style="background: #fefce8; border: 1px solid #fde047; border-radius: 8px; padding: 15px; margin: 10px 0;">
+                        任务在 ${status.current_phase} 阶段被中断<br>
+                        已完成进度: ${Math.round(status.overall_progress * 100)}%
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function sendTraditionalMessage(message) {
+            // 直接使用传统聊天API
+            try {
+                updateStatus('发送消息中...', 'loading');
+                
+                const response = await apiRequest(`${API_BASE_URL}/chat`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        message: message,
+                        user_id: userId,
+                        session_id: sessionId,
+                        temperature: 0.7
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                addMessage(result.response || '无响应内容', false);
+                updateStatus('响应完成', 'success');
+                
+            } catch (error) {
+                console.error('传统聊天错误:', error);
+                addMessage(`抱歉，发生了错误: ${error.message}`, false);
+                updateStatus('发送失败', 'error');
+            } finally {
+                sendBtn.disabled = false;
+                messageInput.disabled = false;
+            }
         }
 
         function handleKeyPress(event) {
