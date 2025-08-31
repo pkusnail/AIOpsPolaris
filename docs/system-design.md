@@ -96,11 +96,11 @@ graph TB
     classDef dataLayer fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000
     classDef featureLayer fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
     
-    class WebUI,CLI,API,WS frontendLayer
-    class RCAService,Stage1,Stage2,Stage3,Stage4,Stage5 analysisLayer  
-    class ImprovedRAG,TopologyService,NERExtractor,RCALogger,EmbeddingService,VectorService coreLayer
-    class Weaviate,Neo4j,MySQL,Redis,Logs dataLayer
-    class Features featureLayer
+    class WebUI,CLI,API,WS frontendLayer;
+    class RCAService,Stage1,Stage2,Stage3,Stage4,Stage5 analysisLayer;
+    class ImprovedRAG,TopologyService,NERExtractor,RCALogger,EmbeddingService,VectorService coreLayer;
+    class Weaviate,Neo4j,MySQL,Redis,Logs dataLayer;
+    class Features featureLayer;
 ```
 
 ### 🧠 核心设计思想
