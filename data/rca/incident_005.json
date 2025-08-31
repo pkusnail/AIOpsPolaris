@@ -1,0 +1,42 @@
+{
+  "incident_id": "INC-2025-005",
+  "title": "Service D2 Database Connection Pool Exhaustion",
+  "occurred_at": "2025-08-24T08:30:00Z", 
+  "resolved_at": "2025-08-24T10:15:00Z",
+  "duration_minutes": 105,
+  "severity": "HIGH",
+  "affected_services": ["service-d2"],
+  "affected_call_paths": ["A->B->D2"],
+  "symptoms": {
+    "user_facing": "33% of B path requests failing with database connection errors",
+    "monitoring_alerts": [
+      "Service D2 database connection pool exhausted",
+      "Service D2 'Cannot get connection' exceptions",
+      "Uneven response time distribution across D instances"
+    ]
+  },
+  "root_cause": {
+    "primary": "Service D2 database connection pool configuration too small (5 connections) for increased load",
+    "secondary": "Long-running queries not properly releasing connections due to missing transaction timeouts"
+  },
+  "analysis_steps": [
+    "1. 33% of B requests failing, but only affecting D2 path",
+    "2. D1 and D3 processing normally with good response times",
+    "3. D2 logs show repeated 'Connection pool exhausted' errors",
+    "4. Database monitoring shows D2 holding 5 active connections indefinitely", 
+    "5. Query analysis reveals some SELECT operations running > 30 minutes",
+    "6. Found missing query timeout configuration in D2's DB config",
+    "7. Connection pool size unchanged since initial deployment"
+  ],
+  "resolution": "Increased D2 connection pool to 20, added query timeouts, killed long-running queries",
+  "lessons_learned": [
+    "Connection pool sizing should scale with service load",
+    "All database queries must have timeouts configured",
+    "Monitor connection pool utilization per service instance"
+  ],
+  "impact_metrics": {
+    "requests_affected": 15600,
+    "revenue_impact_usd": 4200,
+    "customers_affected": 92
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "incident_id": "INC-2025-003",
+  "title": "Service F Memory Leak Leading to OutOfMemory Crashes",
+  "occurred_at": "2025-08-22T16:20:00Z",
+  "resolved_at": "2025-08-22T18:15:00Z",
+  "duration_minutes": 115,
+  "severity": "HIGH",
+  "affected_services": ["service-c", "service-f"],
+  "affected_call_paths": ["A->C->F"],
+  "symptoms": {
+    "user_facing": "All requests to C path returning 500 errors after 17:00",
+    "monitoring_alerts": [
+      "Service F JVM heap usage > 95%",
+      "Service F OutOfMemoryError exceptions",
+      "Service C downstream timeout errors"
+    ]
+  },
+  "root_cause": {
+    "primary": "Service F memory leak in HTTP client connection pool not releasing connections",
+    "secondary": "Missing connection timeout configuration causing connections to accumulate"
+  },
+  "analysis_steps": [
+    "1. All C path requests failing with 500 errors",
+    "2. Service C logs show F returning connection timeouts",
+    "3. Service F JVM metrics show continuous memory growth",
+    "4. Heap dump analysis reveals 10K+ unclosed HTTP connections",
+    "5. Review recent code changes in F's external API client",
+    "6. Found missing connection.close() in exception handling",
+    "7. Connection pool exhausted after 3 hours of accumulation"
+  ],
+  "resolution": "Deployed hotfix with proper connection cleanup, restarted F with increased heap size temporarily",
+  "lessons_learned": [
+    "Static code analysis should check for resource leaks",
+    "Connection pool monitoring and alerts needed",
+    "Implement circuit breaker pattern for external dependencies"
+  ],
+  "impact_metrics": {
+    "requests_affected": 25000,
+    "revenue_impact_usd": 8500,
+    "customers_affected": 156
+  }
+}

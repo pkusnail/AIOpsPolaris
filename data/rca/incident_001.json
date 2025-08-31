@@ -1,0 +1,43 @@
+{
+  "incident_id": "INC-2025-001",
+  "title": "Service B CPU Overload Causing Chain Latency",
+  "occurred_at": "2025-08-20T14:30:00Z",
+  "resolved_at": "2025-08-20T16:45:00Z",
+  "duration_minutes": 135,
+  "severity": "HIGH",
+  "affected_services": ["service-a", "service-b", "service-d1", "service-d2", "service-d3"],
+  "affected_call_paths": ["A->B->D1", "A->B->D2", "A->B->D3"],
+  "symptoms": {
+    "user_facing": "API response time increased from 200ms to 3-5 seconds for 60% of requests",
+    "monitoring_alerts": [
+      "Service A response time > 2s threshold",
+      "Service B CPU utilization > 90%",
+      "Service D* timeout errors increasing"
+    ]
+  },
+  "root_cause": {
+    "primary": "Service B experienced CPU overload due to inefficient algorithm in new deployment",
+    "secondary": "Memory leak in B's request processing causing garbage collection pressure"
+  },
+  "analysis_steps": [
+    "1. User complaints about slow API responses",
+    "2. Check Service A metrics - high response time but low CPU/memory",
+    "3. Examine downstream services B and C",
+    "4. Service B shows 95% CPU utilization and high GC time",
+    "5. Service C metrics normal, indicating issue in A->B->D* path",
+    "6. Analyze Service B recent deployments",
+    "7. Found inefficient sorting algorithm in v2.3.1 release",
+    "8. Confirmed memory leak in request processing pool"
+  ],
+  "resolution": "Rolled back Service B to v2.2.9, implemented proper resource pooling",
+  "lessons_learned": [
+    "Load testing should include sustained high-volume scenarios",
+    "Memory profiling needed in staging environment",
+    "Automated rollback triggers for CPU threshold violations"
+  ],
+  "impact_metrics": {
+    "requests_affected": 45000,
+    "revenue_impact_usd": 12000,
+    "customers_affected": 230
+  }
+}

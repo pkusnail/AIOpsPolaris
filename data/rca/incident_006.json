@@ -1,0 +1,42 @@
+{
+  "incident_id": "INC-2025-006",
+  "title": "Service A Load Balancer Malfunction Causing Traffic Imbalance",
+  "occurred_at": "2025-08-25T13:10:00Z",
+  "resolved_at": "2025-08-25T14:55:00Z", 
+  "duration_minutes": 105,
+  "severity": "HIGH",
+  "affected_services": ["service-a", "service-b", "service-c"],
+  "affected_call_paths": ["A->B->D*", "A->C->F"],
+  "symptoms": {
+    "user_facing": "System overloaded - 80% of requests experiencing high latency",
+    "monitoring_alerts": [
+      "Service B CPU and memory utilization > 90%",
+      "Service C idle with < 5% resource utilization", 
+      "Service A routing anomaly detected"
+    ]
+  },
+  "root_cause": {
+    "primary": "Service A load balancer configuration bug routing 95% traffic to B path, 5% to C path",
+    "secondary": "Incorrect weight configuration after recent A service deployment"
+  },
+  "analysis_steps": [
+    "1. System-wide performance degradation affecting most users",
+    "2. Service B showing extreme load (95% CPU), Service C nearly idle",
+    "3. Traffic distribution analysis shows 95:5 ratio instead of expected 60:40",
+    "4. Load balancer logs reveal configuration change during last A deployment", 
+    "5. Review A's routing configuration files",
+    "6. Found hardcoded weight values overriding dynamic balancing",
+    "7. Configuration error introduced in deployment automation"
+  ],
+  "resolution": "Corrected load balancer weights, redeployed A service, verified traffic distribution",
+  "lessons_learned": [
+    "Load balancer configurations must be validated before deployment",
+    "Implement traffic distribution monitoring and alerting",
+    "Automated rollback for routing configuration errors"
+  ],
+  "impact_metrics": {
+    "requests_affected": 67000,
+    "revenue_impact_usd": 15800,
+    "customers_affected": 445
+  }
+}

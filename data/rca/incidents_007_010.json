@@ -1,0 +1,170 @@
+[
+{
+  "incident_id": "INC-2025-007",
+  "title": "Service D3 Disk Space Exhaustion Preventing Request Processing",
+  "occurred_at": "2025-08-26T19:45:00Z",
+  "resolved_at": "2025-08-26T21:30:00Z",
+  "duration_minutes": 105,
+  "severity": "HIGH", 
+  "affected_services": ["service-d3"],
+  "affected_call_paths": ["A->B->D3"],
+  "symptoms": {
+    "user_facing": "33% of B path requests failing with 500 internal server errors",
+    "monitoring_alerts": [
+      "Service D3 disk usage 100%",
+      "Service D3 unable to write temp files",
+      "Service D3 application crashes due to disk write failures"
+    ]
+  },
+  "root_cause": {
+    "primary": "Service D3 disk space exhausted by accumulated temporary cache files not being cleaned",
+    "secondary": "Cache cleanup cron job disabled during maintenance and never re-enabled"
+  },
+  "analysis_steps": [
+    "1. 33% of B requests failing, isolated to D3 instance",
+    "2. D3 system metrics show 100% disk utilization",
+    "3. D3 application logs show 'No space left on device' errors",
+    "4. Investigation reveals /tmp directory with 25GB of cache files", 
+    "5. Cache files dated back 2 weeks, not being cleaned up",
+    "6. Found disabled cleanup cron job in system maintenance logs",
+    "7. Manual cleanup restored service functionality"
+  ],
+  "resolution": "Manually cleaned disk space, re-enabled cache cleanup cron job, added disk monitoring",
+  "lessons_learned": [
+    "Disk space monitoring with proactive alerts needed",
+    "Maintenance procedures must include verification checklists",
+    "Implement automated cleanup with fallback procedures"
+  ],
+  "impact_metrics": {
+    "requests_affected": 19200,
+    "revenue_impact_usd": 5100,
+    "customers_affected": 127
+  }
+},
+{
+  "incident_id": "INC-2025-008", 
+  "title": "Service B Memory Pressure Causing Frequent Garbage Collection",
+  "occurred_at": "2025-08-27T10:20:00Z",
+  "resolved_at": "2025-08-27T12:45:00Z",
+  "duration_minutes": 145,
+  "severity": "MEDIUM",
+  "affected_services": ["service-b"],
+  "affected_call_paths": ["A->B->D*"],
+  "symptoms": {
+    "user_facing": "B path requests experiencing variable latency spikes (200ms to 2s)",
+    "monitoring_alerts": [
+      "Service B JVM GC time > 15% of total time",
+      "Service B memory utilization consistently > 85%",
+      "Service B response time variance high"
+    ]
+  },
+  "root_cause": {
+    "primary": "Service B JVM heap size insufficient for increased load, causing frequent full GC cycles",
+    "secondary": "Memory leak in request context objects not being garbage collected promptly"
+  },
+  "analysis_steps": [
+    "1. B path showing inconsistent response times with periodic spikes",
+    "2. JVM monitoring shows frequent full GC cycles (every 30 seconds)",
+    "3. Heap analysis reveals 85-95% utilization before each GC",
+    "4. GC logs show old generation collection taking 800ms-1.2s",
+    "5. Memory profiling identifies request context objects accumulating",
+    "6. Found ThreadLocal variables not being cleared after requests",
+    "7. Combination of insufficient heap + memory leak causing pressure"
+  ],
+  "resolution": "Increased B service heap size from 2GB to 4GB, fixed ThreadLocal cleanup",
+  "lessons_learned": [
+    "JVM heap sizing should account for peak load scenarios",
+    "Regular memory profiling to identify accumulation patterns",
+    "ThreadLocal usage requires explicit cleanup procedures"
+  ],
+  "impact_metrics": {
+    "requests_affected": 34000,
+    "revenue_impact_usd": 6800,
+    "customers_affected": 203
+  }
+},
+{
+  "incident_id": "INC-2025-009",
+  "title": "Service F External API Dependency Timeout Cascade",
+  "occurred_at": "2025-08-28T14:15:00Z", 
+  "resolved_at": "2025-08-28T16:00:00Z",
+  "duration_minutes": 105,
+  "severity": "HIGH",
+  "affected_services": ["service-f", "service-c"],
+  "affected_call_paths": ["A->C->F"],
+  "symptoms": {
+    "user_facing": "All C path requests timing out after 30 seconds",
+    "monitoring_alerts": [
+      "Service F external API timeout rate > 50%",
+      "Service F request queue backing up",
+      "Service C downstream timeout errors"
+    ]
+  },
+  "root_cause": {
+    "primary": "External payment API provider experiencing outage causing F service timeouts",
+    "secondary": "Service F lacks circuit breaker pattern, continuing to call failing API"
+  },
+  "analysis_steps": [
+    "1. All C path requests failing with timeout errors",
+    "2. Service C logs show F taking > 30s to respond",
+    "3. Service F logs reveal external payment API timeouts",
+    "4. External API provider status page confirms ongoing outage",
+    "5. F service continuing to retry failed API calls without backoff",
+    "6. Request queue in F backing up, consuming all threads",
+    "7. No fallback mechanism or circuit breaker implemented"
+  ],
+  "resolution": "Implemented temporary circuit breaker, enabled fallback mode, coordinated with API provider",
+  "lessons_learned": [
+    "Circuit breaker pattern essential for external dependencies",
+    "Implement graceful degradation for non-critical external calls",
+    "Monitor external dependency health and SLA compliance"
+  ],
+  "impact_metrics": {
+    "requests_affected": 28500,
+    "revenue_impact_usd": 11200,
+    "customers_affected": 189
+  }
+},
+{
+  "incident_id": "INC-2025-010",
+  "title": "Network Partition Between Service C and F Data Centers",
+  "occurred_at": "2025-08-29T16:30:00Z",
+  "resolved_at": "2025-08-29T18:45:00Z", 
+  "duration_minutes": 135,
+  "severity": "CRITICAL",
+  "affected_services": ["service-c", "service-f"],
+  "affected_call_paths": ["A->C->F"],
+  "symptoms": {
+    "user_facing": "Complete failure of C path requests - 100% error rate",
+    "monitoring_alerts": [
+      "Service C cannot reach Service F",
+      "Network connectivity lost between DC-East and DC-West",
+      "Service F health checks failing from C's perspective"
+    ]
+  },
+  "root_cause": {
+    "primary": "Network partition caused by ISP backbone fiber cut between data centers",
+    "secondary": "No cross-datacenter redundancy or failover mechanism implemented"
+  },
+  "analysis_steps": [
+    "1. Complete failure of all C path requests starting 16:30",
+    "2. Service C logs show 'Connection refused' to all F endpoints",
+    "3. Service F appears healthy from its own monitoring",
+    "4. Network team confirms connectivity loss between DC-East (C) and DC-West (F)",
+    "5. ISP reports fiber cut affecting backbone connection",
+    "6. No alternative network paths available",
+    "7. Services not designed for cross-DC failures"
+  ],
+  "resolution": "ISP repaired fiber connection, implemented temporary traffic rerouting",
+  "lessons_learned": [
+    "Multi-datacenter deployments need network redundancy",
+    "Implement cross-DC failover capabilities", 
+    "Network partition testing should be part of disaster recovery"
+  ],
+  "impact_metrics": {
+    "requests_affected": 42000,
+    "revenue_impact_usd": 18500,
+    "customers_affected": 312
+  }
+}
+]

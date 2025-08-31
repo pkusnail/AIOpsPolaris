@@ -1,0 +1,42 @@
+{
+  "incident_id": "INC-2025-002", 
+  "title": "Service D1 Disk I/O Bottleneck Causing Partial Request Failures",
+  "occurred_at": "2025-08-21T09:15:00Z",
+  "resolved_at": "2025-08-21T11:30:00Z", 
+  "duration_minutes": 135,
+  "severity": "MEDIUM",
+  "affected_services": ["service-d1"],
+  "affected_call_paths": ["A->B->D1"],
+  "symptoms": {
+    "user_facing": "33% of requests through B path experiencing 5-10 second delays",
+    "monitoring_alerts": [
+      "Service D1 disk I/O wait time > 80%", 
+      "Service D1 response time > 5s threshold",
+      "Uneven load distribution across D instances"
+    ]
+  },
+  "root_cause": {
+    "primary": "Service D1 disk I/O bottleneck caused by large log files not being rotated",
+    "secondary": "Log4j configuration missing rotation policy, causing single 15GB log file"
+  },
+  "analysis_steps": [
+    "1. Monitoring shows 33% of B->D requests are slow",
+    "2. Check load balancer - traffic evenly distributed to D1, D2, D3", 
+    "3. D2 and D3 respond normally, D1 shows high response times",
+    "4. D1 system metrics show 85% disk I/O wait time",
+    "5. Investigation shows massive application.log (15GB)",
+    "6. Log rotation configuration was overridden in last deployment",
+    "7. Single large file causing read/write contention"
+  ],
+  "resolution": "Implemented emergency log rotation, fixed Log4j configuration, redistributed load during maintenance",
+  "lessons_learned": [
+    "Log rotation policies must be validated in deployment pipeline",
+    "Disk I/O monitoring alerts needed for all service instances", 
+    "Implement automatic log cleanup procedures"
+  ],
+  "impact_metrics": {
+    "requests_affected": 18000,
+    "revenue_impact_usd": 3200,
+    "customers_affected": 89
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "incident_id": "INC-2025-004",
+  "title": "Service C to F Network Timeout Causing Intermittent Failures", 
+  "occurred_at": "2025-08-23T11:45:00Z",
+  "resolved_at": "2025-08-23T13:20:00Z",
+  "duration_minutes": 95,
+  "severity": "MEDIUM",
+  "affected_services": ["service-c", "service-f"],
+  "affected_call_paths": ["A->C->F"],
+  "symptoms": {
+    "user_facing": "50% of C path requests timing out, intermittent pattern",
+    "monitoring_alerts": [
+      "Service C socket timeout exceptions", 
+      "Service F connection refused errors",
+      "Network packet loss between C and F subnets"
+    ]
+  },
+  "root_cause": {
+    "primary": "Network switch firmware bug causing packet drops between C and F network segments",
+    "secondary": "Inadequate connection retry logic in C's F client configuration"
+  },
+  "analysis_steps": [
+    "1. Intermittent 50% failure rate on A->C->F path",
+    "2. Service C shows SocketTimeoutException to F",
+    "3. Service F logs show some requests never arriving",
+    "4. Network monitoring reveals 15% packet loss C<->F",
+    "5. Other services communicating fine, isolated to C-F link",
+    "6. Network team identifies faulty switch firmware",
+    "7. Switch replaced, confirmed network stability restored"
+  ],
+  "resolution": "Replaced network switch, updated C service retry configuration",
+  "lessons_learned": [
+    "Network monitoring should track inter-service packet loss",
+    "Implement exponential backoff retry logic",
+    "Cross-team communication protocols for infrastructure issues"
+  ],
+  "impact_metrics": {
+    "requests_affected": 12500,
+    "revenue_impact_usd": 2800,
+    "customers_affected": 78
+  }
+}
