@@ -9,7 +9,7 @@ import json
 import sys
 from datetime import datetime
 
-API_BASE_URL = "http://localhost:8888"
+API_BASE_URL = "http://localhost:8000"  # Updated to correct port
 
 def print_banner():
     """打印欢迎信息"""

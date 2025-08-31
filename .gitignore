@@ -191,6 +191,16 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# AIOps Polaris specific
+# Embedding cache files (generated at runtime)
+cache/
+cache/embeddings/
+*.pkl
+
+# Temporary files
+*.tmp
+*.temp
+
 # PyPI configuration file
 .pypirc
 

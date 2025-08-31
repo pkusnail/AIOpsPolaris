@@ -1,16 +1,22 @@
-# Web框架
+# AIOps Polaris - 智能运维平台依赖包
+
+# =================== Web框架 ===================
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
+python-multipart==0.0.6
 
-# 数据库
+# =================== 数据库 ===================
+# 关系数据库
 sqlalchemy==2.0.23
 aiomysql==0.2.0
+asyncpg>=0.28.0
 alembic==1.13.0
 
-# Neo4j图数据库
+# Neo4j图数据库  
 neo4j==5.15.0
+py2neo>=2021.2.3
 
 # Weaviate向量数据库
 weaviate-client==3.25.3
@@ -19,21 +25,40 @@ weaviate-client==3.25.3
 redis==5.0.1
 aioredis==2.0.1
 
-# 监控和日志
+# =================== AI/ML ===================
+# NLP和机器学习
+transformers>=4.20.0
+sentence-transformers>=2.2.0
+spacy>=3.4.0
+torch>=1.12.0
+numpy>=1.21.0
+pandas>=1.4.0
+
+# OpenAI API (如果使用)
+openai>=1.0.0
+
+# =================== 监控和日志 ===================
 prometheus-client==0.19.0
 structlog==23.2.0
 
-# HTTP客户端
+# =================== HTTP客户端 ===================
 httpx==0.25.2
 aiohttp==3.9.1
+requests>=2.28.0
 
-# 工具库
+# =================== 工具库 ===================
 python-dotenv==1.0.0
 click==8.1.7
 pyyaml==6.0.1
 jinja2==3.1.2
-python-multipart==0.0.6
 psutil==5.9.6
+rich>=12.0.0
 
-# 安全
+# =================== 安全 ===================
 cryptography>=42.0.0
+
+# =================== 开发工具 (可选) ===================
+# pytest>=7.0.0
+# black>=22.0.0  
+# flake8>=4.0.0
+# mypy>=0.950
