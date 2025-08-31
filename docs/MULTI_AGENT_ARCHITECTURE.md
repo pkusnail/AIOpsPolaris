@@ -55,11 +55,11 @@ graph TB
     PLANNER --> PLAN_DATA
     KNOWLEDGE --> EVIDENCE
     
-    style PLANNER fill:#e3f2fd
-    style KNOWLEDGE fill:#e8f5e8
-    style REASONING fill:#fff3e0
-    style EXECUTOR fill:#fce4ec
-    style STREAM fill:#f3e5f5
+    style PLANNER fill:#bbdefb,stroke:#0d47a1,stroke-width:3px,color:#000000
+    style KNOWLEDGE fill:#c8e6c9,stroke:#1b5e20,stroke-width:3px,color:#000000
+    style REASONING fill:#ffe0b2,stroke:#bf360c,stroke-width:3px,color:#000000
+    style EXECUTOR fill:#f8bbd9,stroke:#880e4f,stroke-width:3px,color:#000000
+    style STREAM fill:#e1bee7,stroke:#4a148c,stroke-width:3px,color:#000000
 ```
 
 ## 🔄 Agent协作工作流
@@ -152,9 +152,9 @@ flowchart TD
     STEPS --> ASSIGN[分配Agent任务]
     ASSIGN --> TRACK[建立追踪机制]
     
-    style ANALYZE fill:#e3f2fd
-    style STEPS fill:#e8f5e8
-    style ASSIGN fill:#fff3e0
+    style ANALYZE fill:#bbdefb,stroke:#0d47a1,stroke-width:3px,color:#000000
+    style STEPS fill:#c8e6c9,stroke:#1b5e20,stroke-width:3px,color:#000000
+    style ASSIGN fill:#ffe0b2,stroke:#bf360c,stroke-width:3px,color:#000000
 ```
 
 ### 规划数据结构
@@ -277,9 +277,9 @@ graph TD
     VALIDATION --> CONFIDENCE[置信度计算<br/>量化分析可信度]
     CONFIDENCE --> ROOT_CAUSE[根本原因结论]
     
-    style PATTERN fill:#e3f2fd
-    style SYNTHESIS fill:#e8f5e8
-    style ROOT_CAUSE fill:#ffebee
+    style PATTERN fill:#bbdefb,stroke:#0d47a1,stroke-width:3px,color:#000000
+    style SYNTHESIS fill:#c8e6c9,stroke:#1b5e20,stroke-width:3px,color:#000000
+    style ROOT_CAUSE fill:#ffcdd2,stroke:#c62828,stroke-width:3px,color:#000000
 ```
 
 ### 推理算法
@@ -340,10 +340,10 @@ flowchart TD
     TIMELINE --> VALIDATION[方案验证<br/>可行性评估]
     VALIDATION --> OUTPUT[输出解决方案]
     
-    style IMMEDIATE fill:#ffebee
-    style PREVENTION fill:#e8f5e8  
-    style MONITORING fill:#e3f2fd
-    style OUTPUT fill:#fff3e0
+    style IMMEDIATE fill:#ffcdd2,stroke:#c62828,stroke-width:3px,color:#000000
+    style PREVENTION fill:#c8e6c9,stroke:#1b5e20,stroke-width:3px,color:#000000
+    style MONITORING fill:#bbdefb,stroke:#0d47a1,stroke-width:3px,color:#000000
+    style OUTPUT fill:#ffe0b2,stroke:#bf360c,stroke-width:3px,color:#000000
 ```
 
 ### 解决方案数据结构

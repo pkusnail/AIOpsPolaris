@@ -51,10 +51,10 @@ graph TB
     JIRA --> WV
     GITLAB --> WV
     
-    style RAG fill:#e1f5fe
-    style SEARCH fill:#f3e5f5
-    style WV fill:#e8f5e8
-    style ST fill:#fff3e0
+    style RAG fill:#bbdefb,stroke:#0d47a1,stroke-width:3px,color:#000000
+    style SEARCH fill:#e1bee7,stroke:#4a148c,stroke-width:3px,color:#000000
+    style WV fill:#c8e6c9,stroke:#1b5e20,stroke-width:3px,color:#000000
+    style ST fill:#ffe0b2,stroke:#bf360c,stroke-width:3px,color:#000000
 ```
 
 ## 🔍 混合搜索算法详解
@@ -164,10 +164,10 @@ flowchart TD
     FILTER --> FORMAT[格式化输出<br/>添加搜索元数据]
     FORMAT --> END([返回搜索结果])
     
-    style VEC fill:#e3f2fd
-    style BM25 fill:#f3e5f5  
-    style MERGE fill:#e8f5e8
-    style RERANK fill:#fff3e0
+    style VEC fill:#bbdefb,stroke:#0d47a1,stroke-width:3px,color:#000000
+    style BM25 fill:#e1bee7,stroke:#4a148c,stroke-width:3px,color:#000000
+    style MERGE fill:#c8e6c9,stroke:#1b5e20,stroke-width:3px,color:#000000
+    style RERANK fill:#ffe0b2,stroke:#bf360c,stroke-width:3px,color:#000000
 ```
 
 ## 🎯 数据源分类与处理

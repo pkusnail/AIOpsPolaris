@@ -150,12 +150,12 @@ graph TB
     AIOpsGraph --> DetailedLogger
     ResultFormatter --> StructuredLog
     
-    %% 样式定义
-    classDef userLayer fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    classDef apiLayer fill:#f3e5f5,stroke:#4a148c,stroke-width:2px  
-    classDef rcaCore fill:#fff3e0,stroke:#e65100,stroke-width:3px
-    classDef dataLayer fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
-    classDef logLayer fill:#fff8e1,stroke:#f57f17,stroke-width:2px
+    %% 样式定义 - 改进配色，提高对比度
+    classDef userLayer fill:#bbdefb,stroke:#0d47a1,stroke-width:3px,color:#000000
+    classDef apiLayer fill:#e1bee7,stroke:#4a148c,stroke-width:3px,color:#000000
+    classDef rcaCore fill:#ffe0b2,stroke:#bf360c,stroke-width:4px,color:#000000
+    classDef dataLayer fill:#c8e6c9,stroke:#1b5e20,stroke-width:3px,color:#000000
+    classDef logLayer fill:#fff3e0,stroke:#e65100,stroke-width:3px,color:#000000
     
     class WebUI,CLI userLayer
     class FastAPI,ChatEndpoint,HealthEndpoint,SearchEndpoint apiLayer
