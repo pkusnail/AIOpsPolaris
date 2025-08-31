@@ -208,13 +208,48 @@ POST /chat/interrupt/{task_id}
 | **Cache** | Redis | 7.0+ | Session management and result caching |
 
 ### Performance Metrics
-| Metric | Target | Current |
-|--------|--------|---------|
-| **Average RCA Completion Time** | < 30s | ~25s |
-| **Search Response Time** | < 50ms | ~15ms |
-| **Agent Switch Latency** | < 100ms | ~80ms |
-| **Concurrent Processing** | 10+ tasks/min | 15 tasks/min |
-| **Search Accuracy** | > 90% | ~94% |
+
+The AIOps Polaris system evaluates performance across multiple dimensions, including system performance, algorithmic effectiveness, and operational efficiency. Actual metrics vary based on hardware resources, data volume, and workload characteristics.
+
+#### 🖥️ **System Performance Metrics**
+| Category | Key Indicators | Measurement Approach |
+|----------|---------------|---------------------|
+| **API Response Time** | Request latency, throughput | P50/P95/P99 percentiles via Prometheus |
+| **Resource Utilization** | CPU, memory, disk I/O | Real-time monitoring through cAdvisor |
+| **Database Performance** | Query execution time, connection pool efficiency | Per-operation timing and connection metrics |
+| **Cache Efficiency** | Hit/miss ratios, eviction rates | Redis and embedding cache statistics |
+
+#### 🤖 **Multi-Agent System Metrics** 
+| Agent Type | Performance Indicators | Evaluation Methods |
+|------------|----------------------|-------------------|
+| **Planner Agent** | Task decomposition quality, planning time | Success rate of generated plans, execution efficiency |
+| **Knowledge Agent** | Entity extraction accuracy, evidence relevance | Precision/recall of NER, search result relevance scores |
+| **Reasoning Agent** | Logic consistency, inference quality | Reasoning path coherence, conclusion validity |
+| **Executor Agent** | Solution effectiveness, action feasibility | Implementation success rate, solution adoption metrics |
+
+#### 🔍 **RAG Search Algorithm Metrics**
+| Component | Quality Measures | Technical Metrics |
+|-----------|-----------------|-------------------|
+| **Vector Search** | Semantic relevance, embedding quality | Cosine similarity scores, vector space density |
+| **BM25 Full-text** | Keyword matching precision | BM25 scoring distribution, term frequency analysis |
+| **Hybrid Reranking** | Combined search effectiveness | Weighted scoring performance, ranking correlation |
+| **Knowledge Retrieval** | Context accuracy, source diversity | Retrieved document relevance, source coverage |
+
+#### 📊 **Operational Intelligence Metrics**
+| Domain | Effectiveness Indicators | Assessment Criteria |
+|--------|------------------------|-------------------|
+| **Root Cause Analysis** | Diagnostic accuracy, time to resolution | Ground truth validation, expert evaluation |
+| **Incident Response** | Alert precision, false positive rates | Historical incident correlation, noise reduction |
+| **Knowledge Discovery** | Pattern recognition, anomaly detection | Unseen pattern identification, prediction accuracy |
+| **Decision Support** | Recommendation quality, user acceptance | Action success rate, operator feedback scores |
+
+#### ⚡ **Scalability & Efficiency Benchmarks**
+- **Concurrent Processing**: Multi-user session handling capacity
+- **Data Volume Scaling**: Performance degradation curves with dataset growth  
+- **Resource Elasticity**: Auto-scaling response to load variations
+- **Cross-service Latency**: End-to-end workflow completion times
+
+*Note: Specific performance numbers depend on deployment environment, data characteristics, and hardware specifications. Benchmark your deployment using the included monitoring tools (Prometheus + Grafana) for environment-specific metrics.*
 
 ## 📚 Detailed Documentation
 
