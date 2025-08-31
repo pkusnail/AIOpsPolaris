@@ -159,7 +159,7 @@ flowchart TD
     VEC_RESULT --> MERGE[结果合并去重]
     BM25_RESULT --> MERGE
     
-    MERGE --> RERANK[混合重排序<br/>α×vector + (1-α)×bm25]
+    MERGE --> RERANK[混合重排序<br/>α×vector + 1-α×bm25]
     RERANK --> FILTER[结果过滤和限制<br/>top-k结果]
     FILTER --> FORMAT[格式化输出<br/>添加搜索元数据]
     FORMAT --> END([返回搜索结果])
