@@ -107,7 +107,7 @@ graph LR
     WEAVIATE_V --> MERGE[结果合并<br/>去重处理]
     WEAVIATE_F --> MERGE
     
-    MERGE --> RERANK[混合重排序<br/>α×vector + (1-α)×bm25]
+    MERGE --> RERANK[混合重排序<br/>alpha*vector + beta*bm25]
     RERANK --> RESULT[搜索结果<br/>TOP-K文档]
 ```
 
@@ -298,25 +298,9 @@ git commit -m "perf(search): optimize vector search with HNSW index"
 - [ ] 插件化架构
 - [ ] 企业级安全认证
 
-## 🙏 致谢
-
-感谢以下开源项目和社区的支持：
-- [FastAPI](https://fastapi.tiangolo.com/) - 现代化的Python Web框架
-- [Weaviate](https://weaviate.io/) - 向量数据库解决方案
-- [Neo4j](https://neo4j.com/) - 图数据库领导者
-- [SentenceTransformers](https://www.sbert.net/) - 语义文本嵌入
-- [OpenAI](https://openai.com/) - 大语言模型API
-
 ## 📄 许可证
 
-本项目采用 [MIT License](LICENSE) 开源许可证。
-
-## 📞 联系我们
-
-- 📧 Email: support@aiops-polaris.com  
-- 💬 讨论区: [GitHub Discussions](https://github.com/your-org/AIOpsPolaris/discussions)
-- 🐛 问题反馈: [GitHub Issues](https://github.com/your-org/AIOpsPolaris/issues)
-- 📚 文档: [项目文档站](https://docs.aiops-polaris.com)
+本项目采用 [Apache 2.0 License](LICENSE) 开源许可证。
 
 ---
 

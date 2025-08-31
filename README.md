@@ -107,7 +107,7 @@ graph LR
     WEAVIATE_V --> MERGE[Result Merging<br/>Deduplication]
     WEAVIATE_F --> MERGE
     
-    MERGE --> RERANK[Hybrid Reranking<br/>α×vector + (1-α)×bm25]
+    MERGE --> RERANK[Hybrid Reranking<br/>alpha*vector + beta*bm25]
     RERANK --> RESULT[Search Results<br/>TOP-K Documents]
 ```
 
@@ -298,25 +298,9 @@ git commit -m "perf(search): optimize vector search with HNSW index"
 - [ ] Plugin architecture
 - [ ] Enterprise-grade security authentication
 
-## 🙏 Acknowledgments
-
-Thanks to the following open source projects and communities for their support:
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
-- [Weaviate](https://weaviate.io/) - Vector database solution
-- [Neo4j](https://neo4j.com/) - Graph database leader
-- [SentenceTransformers](https://www.sbert.net/) - Semantic text embeddings
-- [OpenAI](https://openai.com/) - Large language model API
-
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
-
-## 📞 Contact Us
-
-- 📧 Email: support@aiops-polaris.com  
-- 💬 Discussions: [GitHub Discussions](https://github.com/your-org/AIOpsPolaris/discussions)
-- 🐛 Issues: [GitHub Issues](https://github.com/your-org/AIOpsPolaris/issues)
-- 📚 Documentation: [Documentation Site](https://docs.aiops-polaris.com)
+This project is licensed under the [Apache 2.0 License](LICENSE).
 
 ---
 
