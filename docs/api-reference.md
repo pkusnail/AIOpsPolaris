@@ -4,9 +4,9 @@
 
 AIOps Polaris 提供了完整的 RESTful API，支持智能运维对话、知识搜索、会话管理等功能。所有API端点都通过 FastAPI 提供，支持自动化的API文档和交互式测试。
 
-**基础URL**: `http://localhost:8888`
+**基础URL**: `http://localhost:8000` (已更新端口)
 
-**API文档**: http://localhost:8888/docs (Swagger UI)
+**API文档**: http://localhost:8000/docs (Swagger UI)
 
 **响应格式**: 所有API返回标准JSON格式
 
@@ -37,9 +37,9 @@ AIOps Polaris 提供了完整的 RESTful API，支持智能运维对话、知识
 
 ## 🤖 智能对话 API
 
-### POST `/chat` - 智能运维对话
+### POST `/chat` - RCA根因分析对话 (已升级)
 
-与AIOps助手进行智能对话，获得运维建议。
+与AIOps助手进行智能根因分析对话，获得基于真实证据的运维分析和建议。
 
 **请求参数**:
 ```json
@@ -95,6 +95,100 @@ AIOps Polaris 提供了完整的 RESTful API，支持智能运维对话、知识
 - `400`: 请求参数错误
 - `500`: 服务器内部错误
 - `503`: 服务不可用
+
+### POST `/chat/stream` - 流式聊天 (新增)
+
+启动流式聊天任务，返回任务ID用于状态轮询。
+
+**请求参数**:
+```json
+{
+  "message": "string",         // 必须: 用户输入的问题
+  "user_id": "string",         // 必须: 用户ID
+  "session_id": "string",      // 可选: 会话ID
+  "temperature": 0.7           // 可选: 生成温度
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "task_id": "task_20240830_103000_abc123",
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "estimated_duration": 3.5,
+  "message": "RCA分析任务已启动，请使用task_id轮询状态"
+}
+```
+
+### GET `/chat/task_status/{task_id}` - 获取任务状态 (新增)
+
+获取流式聊天任务的执行状态和进度。
+
+**参数**:
+- `task_id` (string): 任务ID
+
+**响应示例**:
+```json
+{
+  "task_id": "task_20240830_103000_abc123",
+  "status": "processing",
+  "progress": 0.65,
+  "current_stage": "Agent推理分析",
+  "current_stage_detail": "正在使用Reasoning Agent分析根因",
+  "estimated_remaining": 1.2,
+  "stages_completed": [
+    {
+      "stage": "NER实体识别",
+      "status": "completed",
+      "duration_ms": 45,
+      "result": "识别到服务: service-b, 指标: CPU"
+    },
+    {
+      "stage": "混合搜索",
+      "status": "completed", 
+      "duration_ms": 1200,
+      "result": "找到8个相关证据文档"
+    },
+    {
+      "stage": "拓扑查询",
+      "status": "completed",
+      "duration_ms": 340,
+      "result": "分析了3个相关服务依赖"
+    },
+    {
+      "stage": "Agent推理分析",
+      "status": "in_progress",
+      "progress": 0.65,
+      "current_detail": "正在分析根因和生成建议"
+    }
+  ],
+  "final_result": null
+}
+```
+
+**任务完成后的响应**:
+```json
+{
+  "task_id": "task_20240830_103000_abc123",
+  "status": "completed",
+  "progress": 1.0,
+  "total_duration": 3.45,
+  "final_result": {
+    "success": true,
+    "response": "基于对service-b的深入分析...",
+    "evidence_files": [...],
+    "topology_data": {...},
+    "confidence_score": 0.89
+  }
+}
+```
+
+**状态值说明**:
+- `queued`: 任务排队中
+- `processing`: 正在执行
+- `completed`: 执行完成
+- `failed`: 执行失败
 
 ---
 
@@ -388,7 +482,7 @@ AIOps Polaris 提供了完整的 RESTful API，支持智能运维对话、知识
 
 **请求示例**:
 ```bash
-curl -X POST "http://localhost:8888/knowledge/extract?source=manual" \
+curl -X POST "http://localhost:8000/knowledge/extract?source=manual" \
   -H "Content-Type: application/json" \
   -d '"Kubernetes deployment failed due to insufficient memory resources"'
 ```
@@ -440,7 +534,7 @@ import requests
 import json
 
 class AIOpsClient:
-    def __init__(self, base_url="http://localhost:8888"):
+    def __init__(self, base_url="http://localhost:8000"):
         self.base_url = base_url
         
     def chat(self, message, user_id, temperature=0.7):
@@ -496,7 +590,7 @@ print(f"系统状态: {health['status']}")
 
 ```javascript
 class AIOpsClient {
-    constructor(baseUrl = 'http://localhost:8888') {
+    constructor(baseUrl = 'http://localhost:8000') {
         this.baseUrl = baseUrl;
     }
 
@@ -554,7 +648,7 @@ client.search('Redis性能优化')
 ## ⚡ 性能考虑
 
 - **并发限制**: 当前支持中等并发，生产环境需要配置适当的工作进程数
-- **响应时间**: 聊天API平均响应时间 2-5秒，搜索API平均 0.5-2秒
+- **响应时间**: RCA分析API平均响应时间 2-5秒，混合搜索API平均 0.5-1.5秒
 - **缓存策略**: 嵌入向量和常用查询结果会被缓存
 - **超时设置**: API调用建议设置30秒超时
 

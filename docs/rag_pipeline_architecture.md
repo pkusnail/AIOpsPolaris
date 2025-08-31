@@ -11,72 +11,111 @@
 ```mermaid
 graph TB
     A[数据源] --> B[Data Pipelines]
-    B --> C[RAG向量服务]
+    B --> C[Improved RAG Service]
     B --> D[知识图谱服务]
-    C --> E[RAG搜索服务]
-    D --> E
-    E --> F[Agent系统]
-    F --> G[RCA分析结果]
+    C --> E[RCA Chat Service]
+    D --> F[Topology Service]
+    E --> G[Agent推理系统]
+    F --> G
+    G --> H[RCA分析结果]
 
-    subgraph "数据源"
-        A1[日志文件]
-        A2[Wiki文档]
-        A3[GitLab项目]
-        A4[Jira工单]
+    subgraph "数据源 Data Sources"
+        A1[日志文件<br/>Incident Logs]
+        A2[Wiki文档<br/>Knowledge Docs]
+        A3[GitLab项目<br/>Code Projects]
+        A4[Jira工单<br/>Issue Tickets]
     end
 
-    subgraph "存储层"
-        C1[Weaviate - 向量数据库]
-        C2[Neo4j - 知识图谱]
-        C3[EmbeddingCollection]
-        C4[FullTextCollection]
+    subgraph "存储层 Storage Layer"
+        C1[Weaviate<br/>向量数据库 384维]
+        C2[Neo4j<br/>知识图谱]
+        C3[MySQL<br/>关系数据库]
+        C4[Redis<br/>缓存层]
     end
 
-    subgraph "Pipeline层"
-        B1[LogPipeline]
-        B2[KnowledgePipeline]
-        B3[KnowledgeGraphPipeline]
+    subgraph "Pipeline层 Processing Layer"
+        B1[LogPipeline<br/>日志处理]
+        B2[KnowledgePipeline<br/>知识处理]
+        B3[KnowledgeGraphPipeline<br/>图谱构建]
+    end
+    
+    subgraph "RAG v2.0 核心服务"
+        E1[混合搜索<br/>Vector + BM25]
+        E2[重排序算法<br/>α=0.6]
+        E3[数据质量过滤<br/>去除None/unknown]
+        E4[实体识别<br/>NER Extractor]
     end
 ```
 
-### 双Collection架构
+### RAG v2.0 混合搜索架构 (已升级)
 
-RAG系统采用双Collection设计，支持向量搜索和全文搜索的混合检索：
+RAG系统已升级为**ImprovedRAGService**，采用真正的混合搜索设计：
 
-1. **EmbeddingCollection**: 存储文档向量，支持语义搜索
-2. **FullTextCollection**: 存储原始文档，支持BM25全文搜索
+1. **向量搜索**: Weaviate 384维向量，使用sentence-transformers/all-MiniLM-L6-v2模型
+2. **BM25全文搜索**: MySQL全文索引，支持关键词精确匹配
+3. **重排序算法**: 加权融合 (α=0.6 向量 + 0.4 BM25)
+4. **数据质量过滤**: 自动过滤None/unknown/低质量数据
+5. **并行执行**: asyncio.gather并发查询多个数据源
 
 ## 核心服务
 
-### 1. RAGVectorService (`src/services/rag_vector_service.py`)
+### 1. ImprovedRAGService (`src/services/improved_rag_service.py`) [新版]
 
-负责向量数据库的操作和管理。
+升级版RAG服务，提供真正的混合搜索能力。
 
 **主要功能**：
-- 创建和管理Weaviate Schema
-- 文档向量化和存储
-- 混合搜索（向量 + BM25）
-- 结果重排序和过滤
+- 并行向量搜索和BM25搜索
+- 智能重排序算法 (RRF + 加权融合)
+- 数据质量自动过滤
+- 性能优化的批量处理
+- 完整的错误处理和日志记录
 
 **关键方法**：
 ```python
-# 创建RAG Schema
-async def create_rag_schema()
+# 混合搜索核心方法
+async def hybrid_search(self, query: str, limit: int = 20, alpha: float = 0.6)
 
-# 添加文档到向量索引
-async def add_embedding_document(content, metadata, keywords)
+# 并行向量搜索
+async def _vector_search(self, query_embedding, limit: int)
 
-# 添加文档到全文索引
-async def add_fulltext_document(content, metadata, keywords)
+# 并行BM25搜索  
+async def _bm25_search(self, query: str, limit: int)
 
-# 混合搜索和重排序
-async def hybrid_search_with_rerank(query, filters=None, limit=10)
+# 重排序算法
+def rerank_results(self, vector_results, bm25_results, query: str, alpha: float)
+
+# 数据质量过滤
+def _filter_results(self, results)
 ```
 
-**Schema设计**：
+### 2. TopologyService (`src/services/topology_service.py`) [新增]
+
+专门处理Neo4j服务拓扑查询的服务。
+
+**主要功能**：
+- 服务依赖关系查询
+- 拓扑数据过滤 (去除None值)
+- 关系路径分析
+- 服务影响范围计算
+
+**关键方法**：
 ```python
+# 获取服务拓扑
+async def get_service_topology(self, service_names: List[str])
+
+# 查询服务依赖
+async def get_service_dependencies(self, service_name: str)
+
+# 分析影响范围
+async def analyze_impact_scope(self, failed_service: str)
+```
+
+**Schema设计 (已优化)**：
+```python
+# Weaviate Schema - 384维向量
 {
     "class": "EmbeddingCollection",
+    "vectorizer": "none",  # 使用自定义向量
     "properties": [
         {"name": "content", "dataType": ["text"]},
         {"name": "source_type", "dataType": ["string"]},
@@ -85,31 +124,72 @@ async def hybrid_search_with_rerank(query, filters=None, limit=10)
         {"name": "timestamp", "dataType": ["string"]},
         {"name": "log_file", "dataType": ["string"]},
         {"name": "line_number", "dataType": ["int"]},
-        {"name": "keywords", "dataType": ["string[]"]}
+        {"name": "keywords", "dataType": ["string[]"]},
+        {"name": "confidence", "dataType": ["number"]}  # 新增置信度
     ]
 }
+
+# MySQL Schema - BM25全文搜索
+CREATE TABLE fulltext_documents (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    content TEXT,
+    source_type VARCHAR(50),
+    service_name VARCHAR(100),
+    timestamp VARCHAR(50),
+    log_file VARCHAR(255),
+    keywords JSON,
+    FULLTEXT KEY ft_content (content),
+    INDEX idx_service (service_name),
+    INDEX idx_timestamp (timestamp)
+);
 ```
 
-### 2. RAGSearchService (`src/services/rag_search_service.py`)
+### 3. RCAChatService (`src/api/rca_chat_endpoint.py`) [新增]
 
-为Agent提供高级搜索接口。
+集成RCA分析流程的聊天服务。
 
 **主要功能**：
-- RCA专用搜索
-- 上下文聚合
-- 时间线分析
-- 服务依赖查询
+- 完整的RCA分析流程协调
+- NER实体识别集成
+- 多阶段数据检索 (并行执行)
+- Agent推理结果整合
+- 证据链构建和可视化
 
 **关键方法**：
 ```python
-# RCA搜索
-async def search_for_rca(incident_description, context=None)
+# 处理RCA查询
+async def process_rca_query(self, query: str, session_id: str)
 
-# 获取RCA上下文
-async def get_rca_context(services, timeframe=None)
+# 搜索证据数据
+async def _search_evidence(self, query: str)
 
-# 搜索事件时间线
-async def search_incident_timeline(service_name, start_time, end_time)
+# 执行RCA分析
+async def _perform_rca_analysis(self, query, evidence, entities)
+
+# 格式化分析结果
+def _format_rca_response(self, analysis_result, evidence, topology)
+```
+
+### 4. NERExtractor (`src/utils/ner_extractor.py`) [新增]
+
+专门的命名实体识别工具，支持中英文服务名识别。
+
+**主要功能**：
+- 服务名称识别 (service-a, service-b等)
+- 性能指标识别 (CPU, memory, disk等)
+- 中文实体识别支持
+- 灵活的正则表达式匹配
+
+**关键方法**：
+```python
+# 提取实体
+def extract_entities(self, text: str) -> Dict[str, List[str]]
+
+# 提取服务名
+def extract_service_names(self, text: str) -> List[str]
+
+# 提取性能指标
+def extract_metrics(self, text: str) -> List[str]
 ```
 
 ## Data Pipeline详解
@@ -230,31 +310,79 @@ def infer_service_dependencies(self, services_data):
 
 ## 搜索和检索机制
 
-### 混合搜索策略
+### 混合搜索策略 v2.0 (已升级)
 
-RAG系统采用向量搜索和BM25搜索的混合策略：
+ImprovedRAGService实现了真正的混合搜索和重排序：
 
 ```python
-async def hybrid_search_with_rerank(self, query, alpha=0.7):
+async def hybrid_search(self, query: str, limit: int = 20, alpha: float = 0.6):
     """
-    混合搜索和重排序
-    alpha: 向量搜索权重 (0.0-1.0)
+    改进的混合搜索算法
+    alpha: 向量搜索权重 (推荐0.6)
     """
-    # 1. 向量搜索 (语义相似度)
-    vector_results = await self.vector_search(query)
+    try:
+        # 1. 并行执行向量搜索和BM25搜索
+        query_embedding = await self._get_query_embedding(query)
+        
+        vector_task = asyncio.create_task(self._vector_search(query_embedding, limit))
+        bm25_task = asyncio.create_task(self._bm25_search(query, limit))
+        
+        vector_results, bm25_results = await asyncio.gather(vector_task, bm25_task)
+        
+        # 2. 数据质量过滤
+        vector_results = self._filter_results(vector_results)
+        bm25_results = self._filter_results(bm25_results)
+        
+        # 3. 重排序算法 (RRF + 加权融合)
+        final_results = self.rerank_results(vector_results, bm25_results, query, alpha)
+        
+        # 4. 结果后处理和置信度计算
+        processed_results = self._post_process_results(final_results, query)
+        
+        return processed_results[:limit]
+        
+    except Exception as e:
+        logger.error(f"混合搜索失败: {e}")
+        return []
+
+def rerank_results(self, vector_results, bm25_results, query: str, alpha: float):
+    """
+    RRF (Reciprocal Rank Fusion) + 加权融合重排序算法
+    """
+    # RRF常数
+    k = 60
     
-    # 2. BM25搜索 (关键词匹配)
-    bm25_results = await self.bm25_search(query)
+    # 构建文档得分字典
+    doc_scores = defaultdict(float)
+    doc_data = {}
     
-    # 3. 混合权重计算
-    combined_results = self._combine_search_results(
-        vector_results, bm25_results, alpha
-    )
+    # 向量搜索结果RRF得分
+    for rank, result in enumerate(vector_results, 1):
+        doc_id = self._get_doc_id(result)
+        rrf_score = 1.0 / (k + rank)
+        doc_scores[doc_id] += alpha * rrf_score
+        doc_data[doc_id] = result
     
-    # 4. 重排序
-    reranked_results = self._rerank_results(combined_results, query)
+    # BM25搜索结果RRF得分
+    for rank, result in enumerate(bm25_results, 1):
+        doc_id = self._get_doc_id(result)
+        rrf_score = 1.0 / (k + rank)
+        doc_scores[doc_id] += (1.0 - alpha) * rrf_score
+        if doc_id not in doc_data:
+            doc_data[doc_id] = result
     
-    return reranked_results
+    # 按得分排序
+    sorted_docs = sorted(doc_scores.items(), key=lambda x: x[1], reverse=True)
+    
+    # 构建最终结果
+    final_results = []
+    for doc_id, score in sorted_docs:
+        result = doc_data[doc_id].copy()
+        result['hybrid_score'] = score
+        result['search_type'] = 'hybrid'
+        final_results.append(result)
+    
+    return final_results
 ```
 
 ### 过滤机制
@@ -282,32 +410,71 @@ results = await rag_service.hybrid_search_with_rerank(
 
 ## RCA搜索专用功能
 
-### 场景化搜索
+### RCA专用分析流程 (全新设计)
 
-针对RCA分析的特殊需求，提供专门的搜索接口：
+基于多阶段数据检索和Agent推理的完整RCA流程：
 
 ```python
-async def search_for_rca(self, incident_description, context=None):
-    """RCA专用搜索"""
+# RCAChatService.process_rca_query() - 完整RCA流程
+async def process_rca_query(self, query: str, session_id: str = "default"):
+    """多阶段RCA分析流程"""
     
-    # 1. 症状关键词提取
-    symptoms = self._extract_symptoms(incident_description)
+    # 阶段1: NER实体识别
+    entities = ner_extractor.extract_entities(query)
+    service_names = entities.get('services', [])
+    metrics = entities.get('metrics', [])
     
-    # 2. 相关日志搜索
-    log_results = await self._search_related_logs(symptoms)
-    
-    # 3. 知识库查询
-    knowledge_results = await self._search_knowledge_base(symptoms)
-    
-    # 4. 依赖关系查询
-    dependency_results = await self._query_dependencies(symptoms)
-    
-    # 5. 上下文聚合
-    aggregated_context = self._aggregate_rca_context(
-        log_results, knowledge_results, dependency_results
+    # 阶段2: 并行数据检索
+    evidence_task = asyncio.create_task(self._search_evidence(query))
+    topology_task = asyncio.create_task(
+        topology_service.get_service_topology(service_names)
     )
     
-    return aggregated_context
+    evidence_data, topology_data = await asyncio.gather(
+        evidence_task, topology_task
+    )
+    
+    # 阶段3: Agent推理分析
+    rca_result = await self._perform_rca_analysis(
+        query, evidence_data, entities
+    )
+    
+    # 阶段4: 结果整合和格式化
+    response = self._format_rca_response(
+        rca_result, evidence_data, topology_data
+    )
+    
+    # 阶段5: 日志记录和返回
+    await self._log_rca_analysis(query, response, session_id)
+    
+    return response
+
+async def _search_evidence(self, query: str):
+    """证据搜索 - 使用改进的混合搜索"""
+    
+    # 使用ImprovedRAGService进行混合搜索
+    search_results = await self.improved_rag_service.hybrid_search(
+        query=query,
+        limit=20,
+        alpha=0.6  # 60%向量搜索 + 40%BM25搜索
+    )
+    
+    # 按证据类型分组
+    evidence = {
+        'logs': [],
+        'knowledge': [],
+        'incidents': [],
+        'topology': []
+    }
+    
+    for result in search_results:
+        source_type = result.get('source_type', 'unknown')
+        if source_type == 'logs':
+            evidence['logs'].append(result)
+        elif source_type in ['wiki', 'gitlab', 'jira']:
+            evidence['knowledge'].append(result)
+    
+    return evidence
 ```
 
 ### 时间线分析
@@ -345,58 +512,140 @@ async def search_incident_timeline(self, service_name, start_time, end_time):
 
 ## 性能优化
 
-### 向量化优化
+### 向量化优化 v2.0
 
 ```python
-class EmbeddingOptimizer:
+class ImprovedEmbeddingService:
     def __init__(self):
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        # 统一使用384维模型
+        self.model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
         self.batch_size = 32
+        self.cache = {}  # 嵌入向量缓存
         
-    async def batch_encode(self, texts):
-        """批量向量化优化"""
+    async def get_embedding(self, text: str) -> List[float]:
+        """获取文本嵌入向量 (支持缓存)"""
+        text_hash = hashlib.md5(text.encode()).hexdigest()
+        
+        if text_hash in self.cache:
+            return self.cache[text_hash]
+            
+        embedding = self.model.encode([text])[0].tolist()
+        self.cache[text_hash] = embedding
+        
+        return embedding
+        
+    async def batch_encode(self, texts: List[str]) -> List[List[float]]:
+        """批量向量化优化 (384维)"""
+        if not texts:
+            return []
+            
         batches = [texts[i:i+self.batch_size] 
                   for i in range(0, len(texts), self.batch_size)]
         
-        embeddings = []
+        all_embeddings = []
         for batch in batches:
-            batch_embeddings = self.model.encode(batch, 
-                                               convert_to_tensor=True)
-            embeddings.extend(batch_embeddings.cpu().numpy())
+            try:
+                batch_embeddings = self.model.encode(
+                    batch, 
+                    convert_to_tensor=False,
+                    normalize_embeddings=True  # 归一化向量
+                )
+                all_embeddings.extend(batch_embeddings.tolist())
+            except Exception as e:
+                logger.error(f"批量向量化失败: {e}")
+                # 填充零向量作为fallback
+                all_embeddings.extend([[0.0] * 384] * len(batch))
         
-        return embeddings
+        return all_embeddings
 ```
 
-### 缓存策略
+### 缓存策略 v2.0 (Redis集成)
 
 ```python
-from functools import lru_cache
+import redis
+import json
+import hashlib
+from typing import Optional
 
-class RAGSearchService:
-    @lru_cache(maxsize=128)
-    def _cached_search(self, query_hash, filters_hash):
-        """搜索结果缓存"""
-        return self._perform_search(query_hash, filters_hash)
-    
-    async def search_with_cache(self, query, filters=None):
-        query_hash = hashlib.md5(query.encode()).hexdigest()
-        filters_hash = hashlib.md5(str(filters).encode()).hexdigest()
+class ImprovedCacheService:
+    def __init__(self):
+        self.redis_client = redis.Redis(host='localhost', port=6379, db=0)
+        self.cache_ttl = 3600  # 1小时过期
         
-        return self._cached_search(query_hash, filters_hash)
+    async def get_search_cache(self, query: str, filters: dict = None) -> Optional[List]:
+        """获取搜索结果缓存"""
+        cache_key = self._generate_cache_key(query, filters)
+        
+        try:
+            cached_result = self.redis_client.get(cache_key)
+            if cached_result:
+                return json.loads(cached_result)
+        except Exception as e:
+            logger.warning(f"缓存读取失败: {e}")
+            
+        return None
+        
+    async def set_search_cache(self, query: str, filters: dict, results: List):
+        """设置搜索结果缓存"""
+        cache_key = self._generate_cache_key(query, filters)
+        
+        try:
+            self.redis_client.setex(
+                cache_key, 
+                self.cache_ttl, 
+                json.dumps(results, ensure_ascii=False)
+            )
+        except Exception as e:
+            logger.warning(f"缓存写入失败: {e}")
+            
+    def _generate_cache_key(self, query: str, filters: dict) -> str:
+        """生成缓存键"""
+        filter_str = json.dumps(filters, sort_keys=True) if filters else ""
+        combined = f"{query}|{filter_str}"
+        return f"search_cache:{hashlib.md5(combined.encode()).hexdigest()}"
+        
+    async def get_embedding_cache(self, text: str) -> Optional[List[float]]:
+        """获取向量嵌入缓存"""
+        cache_key = f"embedding:{hashlib.md5(text.encode()).hexdigest()}"
+        
+        try:
+            cached_embedding = self.redis_client.get(cache_key)
+            if cached_embedding:
+                return json.loads(cached_embedding)
+        except Exception as e:
+            logger.warning(f"嵌入向量缓存读取失败: {e}")
+            
+        return None
+        
+    async def set_embedding_cache(self, text: str, embedding: List[float]):
+        """设置向量嵌入缓存"""
+        cache_key = f"embedding:{hashlib.md5(text.encode()).hexdigest()}"
+        
+        try:
+            self.redis_client.setex(
+                cache_key, 
+                self.cache_ttl * 24,  # 嵌入向量缓存24小时
+                json.dumps(embedding)
+            )
+        except Exception as e:
+            logger.warning(f"嵌入向量缓存写入失败: {e}")
 ```
 
-## 数据统计
+## 数据统计 (最新)
 
-当前RAG系统包含的数据量：
+当前RAG v2.0系统包含的数据量：
 
-- **向量索引**: 234条记录
-- **全文索引**: 234条记录  
-- **知识图谱**: 27个节点，11个关系
-- **数据源**: 
-  - 日志文件: 4个 (225条记录)
-  - Wiki文档: 3个
-  - GitLab项目: 3个
-  - Jira工单: 3个
+- **Weaviate向量索引**: 234条记录 (384维)
+- **MySQL全文索引**: 234条记录 (BM25)
+- **Neo4j知识图谱**: 27个节点，11个关系 (已过滤None值)
+- **Redis缓存**: 实时缓存查询结果和向量嵌入
+- **数据源分布**: 
+  - 日志文件: 4个 (225条记录) - **主要训练数据**
+  - Wiki文档: 3个 (技术知识库)
+  - GitLab项目: 3个 (代码仓库信息)
+  - Jira工单: 3个 (问题追踪)
+- **数据质量**: 已过滤所有None/unknown/空值
+- **模型版本**: sentence-transformers/all-MiniLM-L6-v2
 
 ### 数据分布
 
@@ -425,50 +674,73 @@ class RAGSearchService:
 ### 1. 运行Pipeline建立索引
 
 ```bash
-# 方法1: 使用一键脚本
+# 方法1: 使用一键脚本 (推荐)
 python run_pipelines.py
 
 # 方法2: 分别运行各pipeline
 python -m src.services.log_pipeline
 python -m src.services.knowledge_pipeline  
 python -m src.services.knowledge_graph_pipeline
+
+# 方法3: 验证数据质量
+python test_log_pipeline.py  # 验证日志处理
+python test_log_schemas.py   # 验证数据格式
 ```
 
-### 2. 测试RAG功能
+### 2. 测试RAG v2.0功能
 
 ```bash
 # 基础连接测试
 python test_rag_simple.py
 
-# 完整集成测试
+# 完整集成测试 (混合搜索)
 python test_rag_integration.py
 
 # Agent集成测试
 python test_agent_simple.py
 
-# 完整RCA流程测试
+# 完整RCA流程测试 (重要)
 python test_complete_rca.py
+
+# 新增测试
+python tests/test_log_processing.py -v  # 日志处理测试
+python tests/test_log_indexer.py      # 索引器测试
 ```
 
-### 3. API调用
+### 3. API调用 (RAG v2.0)
 
 ```python
-# 直接使用RAG服务
-from src.services.rag_search_service import RAGSearchService
+# 直接使用改进的RAG服务
+from src.services.improved_rag_service import ImprovedRAGService
 
-rag_service = RAGSearchService()
-results = await rag_service.search_for_rca(
-    incident_description="service-b CPU使用率过高，响应超时",
-    context={"services": ["service-b"], "timeframe": "last_24h"}
+rag_service = ImprovedRAGService()
+results = await rag_service.hybrid_search(
+    query="service-b CPU使用率过高，响应超时",
+    limit=20,
+    alpha=0.6  # 向量搜索权重
 )
 
-# 通过Web API
+# 使用完整RCA流程
+from src.api.rca_chat_endpoint import RCAChatService
+
+rca_service = RCAChatService()
+analysis = await rca_service.process_rca_query(
+    query="service-b CPU使用率过高，响应超时，请分析根本原因",
+    session_id="rca-session-001"
+)
+
+# 通过Web API (已集成RCA流程)
 import requests
 
 response = requests.post("http://localhost:8000/chat", json={
     "message": "service-b CPU使用率过高，请分析根本原因",
-    "session_id": "rca-session"
+    "user_id": "web_user_123",
+    "temperature": 0.7
 })
+
+print(f"分析结果: {response.json()['response']}")
+print(f"证据文件: {response.json().get('evidence_files', [])}")
+print(f"拓扑关系: {response.json().get('topology_data', {})}")
 ```
 
 ## 故障排查
