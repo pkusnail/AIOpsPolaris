@@ -59,18 +59,25 @@
         .messages {
             flex: 1;
             overflow-y: auto;
+            overflow-x: hidden;
             border: 1px solid #e0e0e0;
             border-radius: 10px;
             padding: 15px;
             margin-bottom: 20px;
             background: #f8f9fa;
+            scroll-behavior: smooth;
+            max-height: 60vh;
+            min-height: 400px;
         }
         
         .message {
             margin-bottom: 15px;
             padding: 12px;
             border-radius: 10px;
-            max-width: 80%;
+            max-width: 85%;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            line-height: 1.4;
         }
         
         .user-message {
@@ -82,6 +89,30 @@
         .bot-message {
             background: #e9ecef;
             color: #333;
+        }
+        
+        .bot-content {
+            margin-top: 5px;
+        }
+        
+        .bot-content h3 {
+            color: #667eea;
+            margin: 10px 0 5px 0;
+            font-size: 1.1em;
+        }
+        
+        .bot-content strong {
+            color: #333;
+        }
+        
+        .bot-content pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
         
         .input-container {
@@ -219,13 +250,14 @@
         <button onclick="clearChat()">🗑️ 清空对话</button>
         
         <h3 style="margin-top: 15px;">💡 示例问题</h3>
-        <button onclick="askExample('服务器CPU使用率过高怎么办？')">CPU过高问题</button>
-        <button onclick="askExample('数据库连接超时如何排查？')">数据库问题</button>
-        <button onclick="askExample('微服务监控最佳实践')">监控实践</button>
+        <button onclick="askExample('service-b CPU使用率过高，响应超时，请分析根本原因')">Service-B CPU过载</button>
+        <button onclick="askExample('service-d1 内存泄漏问题，请帮我分析')">Service-D1内存问题</button>
+        <button onclick="askExample('数据库连接失败，多个服务无法访问')">数据库连接问题</button>
+        <button onclick="askExample('分析incident_001中的故障根因')">分析日志故障</button>
     </div>
 
     <script>
-        const API_BASE_URL = 'http://localhost:8888';
+        const API_BASE_URL = 'http://localhost:8000';
         
         // 添加请求拦截器处理CORS
         async function apiRequest(url, options = {}) {
@@ -263,14 +295,49 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
             
+            // 检查用户是否正在查看历史消息
+            const wasAtBottom = messagesContainer.scrollTop + messagesContainer.clientHeight >= messagesContainer.scrollHeight - 10;
+            
             if (isUser) {
                 messageDiv.innerHTML = `<strong>👤 您:</strong><br>${escapeHtml(content)}`;
             } else {
-                messageDiv.innerHTML = `<strong>🤖 AIOps助手:</strong><br><pre>${escapeHtml(content)}</pre>`;
+                // 对于机器人回复，支持简单的Markdown格式
+                const formattedContent = formatBotMessage(content);
+                messageDiv.innerHTML = `<strong>🤖 AIOps助手:</strong><br><div class="bot-content">${formattedContent}</div>`;
             }
             
             messagesContainer.appendChild(messageDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            
+            // 只有当用户在底部时才自动滚动，或者是用户发送的新消息
+            if (wasAtBottom || isUser) {
+                setTimeout(() => {
+                    messagesContainer.scrollTo({
+                        top: messagesContainer.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                }, 100);
+            }
+        }
+
+        function formatBotMessage(content) {
+            // 转换简单的Markdown格式
+            let formatted = escapeHtml(content);
+            
+            // 处理标题
+            formatted = formatted.replace(/^## (.+)$/gm, '<h3 style="color: #667eea; margin: 10px 0 5px 0;">$1</h3>');
+            formatted = formatted.replace(/^\*\*(.+)\*\*:/gm, '<strong style="color: #333;">$1:</strong>');
+            
+            // 处理列表
+            formatted = formatted.replace(/^- (.+)$/gm, '• $1<br>');
+            formatted = formatted.replace(/^  • (.+)$/gm, '&nbsp;&nbsp;• $1<br>');
+            
+            // 处理代码块
+            formatted = formatted.replace(/```([^`]+)```/g, '<pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0; overflow-x: auto;">$1</pre>');
+            
+            // 处理换行
+            formatted = formatted.replace(/\n/g, '<br>');
+            
+            return formatted;
         }
 
         function escapeHtml(text) {
@@ -283,9 +350,13 @@
             const message = messageInput.value.trim();
             if (!message) return;
 
+            // 防止重复发送
+            if (sendBtn.disabled) return;
+
             addMessage(message, true);
             messageInput.value = '';
             sendBtn.disabled = true;
+            messageInput.disabled = true;
             updateStatus('正在处理您的请求...', 'loading');
 
             try {
@@ -293,26 +364,40 @@
                     method: 'POST',
                     body: JSON.stringify({
                         message: message,
-                        user_id: userId,
-                        temperature: 0.7
+                        session_id: userId
                     })
                 });
 
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
                 const result = await response.json();
                 
-                if (response.ok) {
-                    const botResponse = result.response || '系统处理完成';
-                    addMessage(botResponse);
-                    updateStatus(`处理完成 (${result.processing_time?.toFixed(2)}s)`, 'success');
-                } else {
-                    addMessage(`错误: ${result.message || '处理失败'}`, false);
-                    updateStatus('处理失败', 'error');
+                const botResponse = result.response || '系统处理完成';
+                addMessage(botResponse);
+                
+                // 显示更详细的状态信息
+                let statusMsg = '处理完成';
+                if (result.processing_time) {
+                    statusMsg += ` (${result.processing_time.toFixed(2)}s)`;
                 }
+                if (result.analysis_type) {
+                    statusMsg += ` [${result.analysis_type}]`;
+                }
+                if (result.evidence_count) {
+                    statusMsg += ` - 找到${result.evidence_count}条证据`;
+                }
+                
+                updateStatus(statusMsg, 'success');
+                
             } catch (error) {
-                addMessage(`连接错误: ${error.message}`, false);
+                console.error('Chat request failed:', error);
+                addMessage(`连接错误: ${error.message}. 请检查API服务是否正在运行 (http://localhost:8000)`, false);
                 updateStatus('连接失败', 'error');
             } finally {
                 sendBtn.disabled = false;
+                messageInput.disabled = false;
                 messageInput.focus();
             }
         }
@@ -421,7 +506,7 @@
 
         // 页面加载时检查系统状态
         window.onload = function() {
-            addMessage('欢迎使用AIOps Polaris智能运维助手！\\n\\n您可以：\\n- 咨询运维相关问题\\n- 使用右侧快捷操作\\n- 尝试示例问题', false);
+            addMessage('欢迎使用AIOps Polaris智能运维助手！\\n\\n🔍 **RAG增强分析能力**:\\n- 基于234条向量索引 + 27个知识图谱节点\\n- 支持日志、Wiki、GitLab、Jira多源数据检索\\n- 智能根本原因分析(RCA)\\n\\n💡 **使用建议**:\\n- 描述具体的故障症状和服务名称\\n- 尝试右侧的RCA示例问题\\n- 可以询问服务依赖关系和解决方案', false);
             checkHealth();
         };
     </script>
