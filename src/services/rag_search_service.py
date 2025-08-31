@@ -287,7 +287,7 @@ class RAGSearchService:
                 MATCH (e:Entity)
                 WHERE toLower(e.name) CONTAINS $word
                    OR toLower(e.type) CONTAINS $word
-                RETURN e.name as name, e.type as type, id(e) as node_id,
+                RETURN e.name as name, e.type as type, elementId(e) as node_id,
                        e.confidence as confidence
                 LIMIT 5
                 """

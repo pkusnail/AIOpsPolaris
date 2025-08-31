@@ -32,7 +32,7 @@ class EmbeddingService:
         """初始化嵌入模型 - 简化版本，使用随机向量模拟"""
         try:
             # 简化实现：使用随机种子生成一致的向量
-            self.embedding_dim = 768  # 标准BERT维度
+            self.embedding_dim = 384  # 与sentence-transformers/all-MiniLM-L6-v2一致
             self.max_seq_length = 512
             
             self.logger.info(f"Initialized simple embedding service with {self.embedding_dim}d vectors")
@@ -121,7 +121,8 @@ class EmbeddingService:
                 self._encode_single, 
                 text
             )
-            return embedding.tolist()
+            # _encode_single already returns a list, no need for tolist()
+            return embedding
             
         except Exception as e:
             self.logger.error(f"Failed to encode text asynchronously: {e}")

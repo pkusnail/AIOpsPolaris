@@ -299,7 +299,7 @@ class SearchService:
             MATCH (e:Entity)
             WHERE toLower(e.name) CONTAINS $query
                OR toLower(e.type) CONTAINS $query
-            RETURN e.name as name, e.type as type, id(e) as node_id
+            RETURN e.name as name, e.type as type, elementId(e) as node_id
             LIMIT 10
             """
             

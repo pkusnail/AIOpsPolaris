@@ -115,7 +115,7 @@ class GraphService:
             MERGE (e:Entity {name: $name, type: $type})
             ON CREATE SET e += $props, e.created_at = $created_at
             ON MATCH SET e += $props, e.updated_at = $updated_at
-            RETURN id(e) as node_id
+            RETURN elementId(e) as node_id
             """
             
             async with self.driver.session() as session:
@@ -164,7 +164,7 @@ class GraphService:
             MERGE (source)-[r:RELATES_TO]->(target)
             ON CREATE SET r += $props
             ON MATCH SET r += $props, r.updated_at = $updated_at
-            RETURN id(r) as rel_id
+            RETURN elementId(r) as rel_id
             """
             
             async with self.driver.session() as session:
@@ -211,7 +211,7 @@ class GraphService:
             MERGE (d:Document {weaviate_id: $weaviate_id})
             ON CREATE SET d += $props
             ON MATCH SET d += $props, d.updated_at = $updated_at
-            RETURN id(d) as node_id
+            RETURN elementId(d) as node_id
             """
             
             async with self.driver.session() as session:
@@ -289,7 +289,7 @@ class GraphService:
             if conditions:
                 query_parts.append("WHERE " + " AND ".join(conditions))
             
-            query_parts.append("RETURN e, id(e) as node_id LIMIT $limit")
+            query_parts.append("RETURN e, elementId(e) as node_id LIMIT $limit")
             query = " ".join(query_parts)
             
             async with self.driver.session() as session:
@@ -326,7 +326,7 @@ class GraphService:
             MATCH (start:Entity {{name: $entity_name, type: $entity_type}})
             MATCH path = (start)-{rel_pattern}-(related:Entity)
             WHERE related <> start
-            RETURN DISTINCT related, id(related) as node_id, length(path) as distance
+            RETURN DISTINCT related, elementId(related) as node_id, length(path) as distance
             ORDER BY distance, related.name
             """
             
@@ -514,7 +514,7 @@ class GraphService:
             MERGE (d:Document {mysql_id: $mysql_id})
             ON CREATE SET d += $props
             ON MATCH SET d += $props, d.updated_at = $updated_at
-            RETURN id(d) as node_id
+            RETURN elementId(d) as node_id
             """
             
             async with self.driver.session() as session:

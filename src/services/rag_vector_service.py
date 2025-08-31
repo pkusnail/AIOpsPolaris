@@ -528,10 +528,9 @@ class RAGVectorService:
             
             query = (
                 self.client.query
-                .get("EmbeddingCollection")
+                .get("EmbeddingCollection", ["content", "title", "source_type", "source_id", "service_name", "hostname", "log_file", "line_number", "log_level", "timestamp", "category", "tags", "author", "created_at", "updated_at", "metadata", "chunk_index", "chunk_size", "parent_id"])
                 .with_near_vector({"vector": query_vector, "certainty": certainty})
                 .with_limit(limit)
-                .with_fields("content title source_type source_id service_name hostname log_file line_number log_level timestamp category tags author created_at updated_at metadata chunk_index chunk_size parent_id")
                 .with_additional(["certainty", "distance"])
             )
             
@@ -577,10 +576,9 @@ class RAGVectorService:
             
             search_query = (
                 self.client.query
-                .get("FullTextCollection")
+                .get("FullTextCollection", ["content", "title", "source_type", "source_id", "service_name", "hostname", "log_file", "line_number", "log_level", "timestamp", "category", "tags", "author", "created_at", "updated_at", "metadata", "keywords", "entities"])
                 .with_bm25(query=query)
                 .with_limit(limit)
-                .with_fields("content title source_type source_id service_name hostname log_file line_number log_level timestamp category tags author created_at updated_at metadata keywords entities")
                 .with_additional(["score"])
             )
             
