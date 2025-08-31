@@ -15,9 +15,9 @@ graph TB
     
     subgraph "API网关层 API Gateway"
         FastAPI[FastAPI Server<br/>:8000端口]
-        ChatEndpoint[/chat端点<br/>RCA入口]
-        HealthEndpoint[/health端点<br/>健康检查]
-        SearchEndpoint[/search端点<br/>知识搜索]
+        ChatEndpoint["/chat端点<br/>RCA入口"]
+        HealthEndpoint["/health端点<br/>健康检查"]
+        SearchEndpoint["/search端点<br/>知识搜索"]
     end
     
     subgraph "RCA分析核心 RCA Analysis Core"
@@ -192,8 +192,8 @@ sequenceDiagram
     Logger-->>RCA: 日志确认
     
     %% 第一阶段: NER实体识别
-    rect rgb(255, 248, 225)
-        Note over RCA,NER: 阶段1: NER实体识别
+    rect rgb(245, 180, 0)
+        Note over RCA,NER: <b>阶段1: NER实体识别</b>
         RCA->>NER: extract_entities(query)
         NER->>NER: 正则匹配服务名和指标
         NER-->>RCA: {services: ["service-b"], metrics: ["CPU"]}
@@ -201,8 +201,8 @@ sequenceDiagram
     end
     
     %% 第二阶段: 并行数据检索
-    rect rgb(232, 245, 233)
-        Note over RCA,DB: 阶段2: 并行数据检索
+    rect rgb(76, 175, 80)
+        Note over RCA,DB: <b>阶段2: 并行数据检索</b>
         
         par 混合搜索
             RCA->>RAG: hybrid_search(query)
@@ -232,8 +232,8 @@ sequenceDiagram
     end
     
     %% 第三阶段: Agent推理分析
-    rect rgb(255, 243, 224)
-        Note over RCA,Graph: 阶段3: Agent推理分析
+    rect rgb(156, 39, 176)
+        Note over RCA,Graph: <b>阶段3: Agent推理分析</b>
         RCA->>Graph: perform_rca_analysis(query, evidence, entities)
         Note over Graph: 基于真实证据进行推理
         
@@ -247,8 +247,8 @@ sequenceDiagram
     end
     
     %% 第四阶段: 结果整合
-    rect rgb(225, 245, 254)
-        Note over RCA,Logger: 阶段4: 结果整合和格式化
+    rect rgb(33, 150, 243)
+        Note over RCA,Logger: <b>阶段4: 结果整合和格式化</b>
         RCA->>RCA: 构建证据链
         RCA->>RCA: 格式化拓扑关系
         RCA->>RCA: 计算置信度评分

@@ -16,97 +16,91 @@ AIOps Polaris 是一个基于现代AI技术栈的智能运维系统，采用**RA
 
 ### 🏗️ 整体系统架构图
 
-```
-                    ┌─────────────────────────────────────────────────────┐
-                    │                AIOps Polaris                        │
-                    │           智能RCA根因分析平台 v2.0                   │
-                    └─────────────────────────────────────────────────────┘
-                                             │
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │                            前端交互层                               │
-    ├─────────────────────────────────────────────────────────────────────┤
-    │  Web UI          CLI Interface      REST API       WebSocket        │
-    │ (Enhanced)       (chat_cli.py)     (FastAPI)      (Real-time)       │
-    │ • 证据详情展示   • 命令行交互       • /chat端点     • 实时更新       │
-    │ • 拓扑关系可视化  • 批量分析工具     • /health检查   • 进度推送       │
-    │ • 上下滚动修复   • 脚本自动化       • /metrics指标  • 状态同步       │
-    └─────────────────────────────────────────────────────────────────────┘
-                                             │
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │                        🧠 RCA智能分析层                             │
-    ├─────────────────────────────────────────────────────────────────────┤
-    │                         RCA Chat Service                           │
-    │                    (集成式RCA分析端点)                              │
-    │                                                                     │
-    │  ┌──────────────────────────────────────────────────────────────┐   │
-    │  │  多阶段分析流水线 (Multi-Stage Analysis Pipeline)           │   │
-    │  │                                                              │   │
-    │  │  1️⃣ NER实体识别    2️⃣ 混合搜索      3️⃣ 拓扑查询          │   │
-    │  │  • 服务名提取      • 向量搜索      • Neo4j查询           │   │
-    │  │  • 故障类型识别    • BM25全文搜索   • 依赖关系分析        │   │
-    │  │  • 中英文支持      • 智能重排序    • 影响传播路径        │   │
-    │  │                                                              │   │
-    │  │  4️⃣ 智能推理       5️⃣ 结果生成                             │   │
-    │  │  • 症状模式分析    • 结构化报告                           │   │
-    │  │  • 根因置信度计算  • 解决方案推荐                         │   │
-    │  │  • 证据验证过滤    • 完整日志记录                         │   │
-    │  └──────────────────────────────────────────────────────────────┘   │
-    └─────────────────────────────────────────────────────────────────────┘
-                                             │
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │                          🔧 核心服务层                              │
-    ├─────────────────────────────────────────────────────────────────────┤
-    │                                                                     │
-    │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
-    │  │  ImprovedRAG     │  │  TopologyService │  │  NERExtractor    │  │
-    │  │     Service      │  │                  │  │                  │  │
-    │  │ • 混合搜索引擎   │  │ • 服务拓扑查询   │  │ • 实体识别器     │  │
-    │  │ • 向量+BM25      │  │ • 依赖关系分析   │  │ • 多语言支持     │  │
-    │  │ • 智能重排序     │  │ • 上下游影响     │  │ • 置信度评分     │  │
-    │  │ • 并发处理       │  │ • 数据验证过滤   │  │ • 服务名标准化   │  │
-    │  └──────────────────┘  └──────────────────┘  └──────────────────┘  │
-    │                                                                     │
-    │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
-    │  │   RCALogger      │  │  EmbeddingService│  │  VectorService   │  │
-    │  │                  │  │                  │  │                  │  │
-    │  │ • 完整日志系统   │  │ • 文本向量化     │  │ • Weaviate操作   │  │
-    │  │ • 分析过程追踪   │  │ • 缓存机制       │  │ • 语义搜索       │  │
-    │  │ • 双文件记录     │  │ • 模型管理       │  │ • 相似度计算     │  │
-    │  │ • 结构化输出     │  │ • 批量处理       │  │ • 索引管理       │  │
-    │  └──────────────────┘  └──────────────────┘  └──────────────────┘  │
-    └─────────────────────────────────────────────────────────────────────┘
-                                             │
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │                       💾 多模态数据存储层                            │
-    ├─────────────────────────────────────────────────────────────────────┤
-    │                                                                     │
-    │ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
-    │ │    Weaviate     │ │      Neo4j      │ │      MySQL      │ │
-    │ │  (向量数据库)   │ │   (知识图谱)    │ │   (业务数据)    │ │
-    │ │ • 双Collection  │ │ • 服务拓扑      │ │ • 会话管理      │ │
-    │ │ • 语义搜索      │ │ • 依赖关系      │ │ • 消息历史      │ │
-    │ │ • BM25全文搜索  │ │ • 实体属性      │ │ • 统计数据      │ │
-    │ │ • 混合索引      │ │ • 关系推理      │ │ • 配置管理      │ │
-    │ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
-    │                                                                     │
-    │ ┌─────────────────┐ ┌─────────────────────────────────────────┐ │
-    │ │      Redis      │ │                Logs                     │ │
-    │ │   (缓存系统)    │ │           (日志系统)                    │ │
-    │ │ • 向量缓存      │ │ • ./logs/rca_analysis.log (概要)       │ │
-    │ │ • 搜索结果      │ │ • ./logs/rca_detailed.log (详细)       │ │
-    │ │ • 会话状态      │ │ • 结构化记录                            │ │
-    │ │ • 配置缓存      │ │ • 可追溯审计                            │ │
-    │ └─────────────────┘ └─────────────────────────────────────────┘ │
-    └─────────────────────────────────────────────────────────────────────┘
-
-    ┌─────────────────────────────────────────────────────────────────────┐
-    │                    🔍 核心技术特性                                  │
-    │ • 混合搜索: 向量+BM25+重排序 (α=0.6向量, 0.4全文)                  │
-    │ • 多阶段推理: NER→搜索→拓扑→推理→输出                               │
-    │ • 数据质量保证: 过滤unknown/None数据，确保真实性                    │
-    │ • 证据驱动分析: 完整证据链追踪(文件名、时间戳、置信度)              │
-    │ • 实时拓扑可视化: 服务依赖关系图形化展示                            │
-    └─────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph "AIOps Polaris - 智能RCA根因分析平台 v2.0"
+        subgraph "前端交互层 Frontend Layer"
+            WebUI[Web UI<br/>• 证据详情展示<br/>• 拓扑关系可视化<br/>• 上下滚动修复]
+            CLI[CLI Interface<br/>• 命令行交互<br/>• 批量分析工具<br/>• 脚本自动化]
+            API[REST API<br/>• /chat端点<br/>• /health检查<br/>• /metrics指标]
+            WS[WebSocket<br/>• 实时更新<br/>• 进度推送<br/>• 状态同步]
+        end
+        
+        subgraph "🧠 RCA智能分析层 Analysis Layer"
+            RCAService[RCA Chat Service<br/>集成式RCA分析端点]
+            
+            subgraph "多阶段分析流水线 Multi-Stage Pipeline"
+                Stage1[1️⃣ NER实体识别<br/>• 服务名提取<br/>• 故障类型识别<br/>• 中英文支持]
+                Stage2[2️⃣ 混合搜索<br/>• 向量搜索<br/>• BM25全文搜索<br/>• 智能重排序]
+                Stage3[3️⃣ 拓扑查询<br/>• Neo4j查询<br/>• 依赖关系分析<br/>• 影响传播路径]
+                Stage4[4️⃣ 智能推理<br/>• 症状模式分析<br/>• 根因置信度计算<br/>• 证据验证过滤]
+                Stage5[5️⃣ 结果生成<br/>• 结构化报告<br/>• 解决方案推荐<br/>• 完整日志记录]
+            end
+        end
+        
+        subgraph "🔧 核心服务层 Core Services"
+            ImprovedRAG[ImprovedRAG Service<br/>• 混合搜索引擎<br/>• 向量+BM25<br/>• 智能重排序<br/>• 并发处理]
+            TopologyService[Topology Service<br/>• 服务拓扑查询<br/>• 依赖关系分析<br/>• 上下游影响<br/>• 数据验证过滤]
+            NERExtractor[NER Extractor<br/>• 实体识别器<br/>• 多语言支持<br/>• 置信度评分<br/>• 服务名标准化]
+            
+            RCALogger[RCA Logger<br/>• 完整日志系统<br/>• 分析过程追踪<br/>• 双文件记录<br/>• 结构化输出]
+            EmbeddingService[Embedding Service<br/>• 文本向量化<br/>• 缓存机制<br/>• 模型管理<br/>• 批量处理]
+            VectorService[Vector Service<br/>• Weaviate操作<br/>• 语义搜索<br/>• 相似度计算<br/>• 索引管理]
+        end
+        
+        subgraph "💾 多模态数据存储层 Data Storage Layer"
+            Weaviate[(Weaviate<br/>向量数据库<br/>• 双Collection<br/>• 语义搜索<br/>• BM25全文搜索<br/>• 混合索引)]
+            Neo4j[(Neo4j<br/>知识图谱<br/>• 服务拓扑<br/>• 依赖关系<br/>• 实体属性<br/>• 关系推理)]
+            MySQL[(MySQL<br/>业务数据<br/>• 会话管理<br/>• 消息历史<br/>• 统计数据<br/>• 配置管理)]
+            
+            Redis[(Redis<br/>缓存系统<br/>• 向量缓存<br/>• 搜索结果<br/>• 会话状态<br/>• 配置缓存)]
+            Logs[📋 日志系统<br/>• ./logs/rca_analysis.log<br/>• ./logs/rca_detailed.log<br/>• 结构化记录<br/>• 可追溯审计]
+        end
+        
+        subgraph "🔍 核心技术特性 Key Features"
+            Features[• 混合搜索: 向量+BM25+重排序 (α=0.6向量, 0.4全文)<br/>• 多阶段推理: NER→搜索→拓扑→推理→输出<br/>• 数据质量保证: 过滤unknown/None数据，确保真实性<br/>• 证据驱动分析: 完整证据链追踪(文件名、时间戳、置信度)<br/>• 实时拓扑可视化: 服务依赖关系图形化展示]
+        end
+    end
+    
+    %% 连接关系
+    WebUI --> RCAService
+    CLI --> RCAService  
+    API --> RCAService
+    WS --> RCAService
+    
+    RCAService --> Stage1
+    Stage1 --> Stage2
+    Stage2 --> Stage3
+    Stage3 --> Stage4
+    Stage4 --> Stage5
+    
+    Stage1 --> NERExtractor
+    Stage2 --> ImprovedRAG
+    Stage3 --> TopologyService
+    Stage4 --> VectorService
+    Stage5 --> RCALogger
+    
+    ImprovedRAG --> Weaviate
+    ImprovedRAG --> Redis
+    TopologyService --> Neo4j
+    NERExtractor --> EmbeddingService
+    VectorService --> Weaviate
+    EmbeddingService --> Redis
+    RCAService --> MySQL
+    RCAService --> Logs
+    
+    %% 样式定义
+    classDef frontendLayer fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    classDef analysisLayer fill:#fff3e0,stroke:#f57c00,stroke-width:3px,color:#000
+    classDef coreLayer fill:#e8f5e8,stroke:#388e3c,stroke-width:2px,color:#000
+    classDef dataLayer fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000
+    classDef featureLayer fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
+    
+    class WebUI,CLI,API,WS frontendLayer
+    class RCAService,Stage1,Stage2,Stage3,Stage4,Stage5 analysisLayer  
+    class ImprovedRAG,TopologyService,NERExtractor,RCALogger,EmbeddingService,VectorService coreLayer
+    class Weaviate,Neo4j,MySQL,Redis,Logs dataLayer
+    class Features featureLayer
 ```
 
 ### 🧠 核心设计思想
