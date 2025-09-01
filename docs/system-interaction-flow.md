@@ -115,7 +115,7 @@ sequenceDiagram
             RAG->>DB: 向量相似搜索 (Weaviate)
             DB-->>RAG: 相似文档
         and
-            RAG->>DB: BM25全文搜索 (MySQL)
+            RAG->>DB: BM25全文搜索 (Weaviate FullTextCollection)
             DB-->>RAG: 匹配文档
         end
         RAG->>RAG: 重排序合并结果 (α=0.6)
@@ -266,7 +266,7 @@ sequenceDiagram
         DB-->>VectorSvc: 返回相似向量
         VectorSvc-->>ImprovedRAGSvc: 向量搜索结果
     and
-        ImprovedRAGSvc->>DB: BM25全文搜索 (MySQL)
+        ImprovedRAGSvc->>DB: BM25全文搜索 (Weaviate FullTextCollection)
         DB-->>ImprovedRAGSvc: 返回文档匹配
     and
         ImprovedRAGSvc->>GraphSvc: 图数据库搜索
@@ -403,7 +403,7 @@ graph TB
     
     subgraph "证据来源 Evidence Sources"
         HybridSearch --> Vector[向量搜索<br/>Weaviate 384d]
-        HybridSearch --> BM25[全文搜索<br/>MySQL BM25]
+        HybridSearch --> BM25[全文搜索<br/>Weaviate BM25]
         TopoQuery --> Neo4j[图数据库<br/>Neo4j Topology]
     end
     

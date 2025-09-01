@@ -109,34 +109,55 @@ hybrid_score = α × vector_score + (1-α) × bm25_score_normalized
 
 ### Weaviate Collection设计
 
-#### EmbeddingCollection (语义搜索)
+#### EmbeddingCollection (语义搜索专用)
 ```json
 {
   "class": "EmbeddingCollection",
-  "properties": [
-    {"name": "content", "dataType": ["text"], "description": "文档内容"},
-    {"name": "source_type", "dataType": ["text"], "description": "数据源类型"},
-    {"name": "service_name", "dataType": ["text"], "description": "服务名称"},
-    {"name": "log_file", "dataType": ["text"], "description": "日志文件名"},
-    {"name": "timestamp", "dataType": ["text"], "description": "时间戳"},
-    {"name": "line_number", "dataType": ["int"], "description": "行号"}
-  ],
+  "description": "语义搜索专用Collection，支持向量检索和rerank",
   "vectorizer": "none",
-  "vectorIndexType": "hnsw"
+  "properties": [
+    {"name": "content", "dataType": ["text"], "description": "文档内容或日志内容", "tokenization": "word"},
+    {"name": "title", "dataType": ["string"], "description": "标题或摘要"},
+    {"name": "source_type", "dataType": ["string"], "description": "数据源类型: logs, wiki, gitlab, jira"},
+    {"name": "source_id", "dataType": ["string"], "description": "源系统中的唯一ID"},
+    {"name": "service_name", "dataType": ["string"], "description": "服务名称"},
+    {"name": "hostname", "dataType": ["string"], "description": "机器名/主机名"},
+    {"name": "log_file", "dataType": ["string"], "description": "日志文件名"},
+    {"name": "line_number", "dataType": ["int"], "description": "日志行数"},
+    {"name": "log_level", "dataType": ["string"], "description": "日志级别"},
+    {"name": "timestamp", "dataType": ["date"], "description": "时间戳"},
+    {"name": "category", "dataType": ["string"], "description": "分类"},
+    {"name": "tags", "dataType": ["string[]"], "description": "标签列表"},
+    {"name": "metadata", "dataType": ["text"], "description": "额外元数据JSON"},
+    {"name": "chunk_index", "dataType": ["int"], "description": "文档分块索引"},
+    {"name": "parent_id", "dataType": ["string"], "description": "父文档ID"}
+  ]
 }
 ```
 
-#### FullTextCollection (全文搜索)
+#### FullTextCollection (BM25全文搜索专用)
 ```json
 {
-  "class": "FullTextCollection", 
+  "class": "FullTextCollection",
+  "description": "全文搜索专用Collection，支持BM25和关键词匹配",
+  "vectorizer": "none",
   "properties": [
-    // 相同字段结构
-  ],
-  "invertedIndexConfig": {
-    "bm25": {"k1": 1.2, "b": 0.75},
-    "stopwords": {"preset": "en"}
-  }
+    {"name": "content", "dataType": ["text"], "description": "文档内容或日志内容", "tokenization": "word"},
+    {"name": "title", "dataType": ["string"], "description": "标题或摘要"},
+    {"name": "source_type", "dataType": ["string"], "description": "数据源类型: logs, wiki, gitlab, jira"},
+    {"name": "source_id", "dataType": ["string"], "description": "源系统中的唯一ID"},
+    {"name": "service_name", "dataType": ["string"], "description": "服务名称"},
+    {"name": "hostname", "dataType": ["string"], "description": "机器名/主机名"},
+    {"name": "log_file", "dataType": ["string"], "description": "日志文件名"},
+    {"name": "line_number", "dataType": ["int"], "description": "日志行数"},
+    {"name": "log_level", "dataType": ["string"], "description": "日志级别"},
+    {"name": "timestamp", "dataType": ["date"], "description": "时间戳"},
+    {"name": "category", "dataType": ["string"], "description": "分类"},
+    {"name": "tags", "dataType": ["string[]"], "description": "标签列表"},
+    {"name": "metadata", "dataType": ["text"], "description": "额外元数据JSON"},
+    {"name": "keywords", "dataType": ["string[]"], "description": "提取的关键词列表"},
+    {"name": "entities", "dataType": ["string[]"], "description": "识别的实体列表"}
+  ]
 }
 ```
 

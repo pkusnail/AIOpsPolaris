@@ -52,7 +52,7 @@ graph TB
 RAG系统已升级为**ImprovedRAGService**，采用真正的混合搜索设计：
 
 1. **向量搜索**: Weaviate 384维向量，使用sentence-transformers/all-MiniLM-L6-v2模型
-2. **BM25全文搜索**: MySQL全文索引，支持关键词精确匹配
+2. **BM25全文搜索**: Weaviate FullTextCollection，支持关键词精确匹配
 3. **重排序算法**: 加权融合 (α=0.6 向量 + 0.4 BM25)
 4. **数据质量过滤**: 自动过滤None/unknown/低质量数据
 5. **并行执行**: asyncio.gather并发查询多个数据源
@@ -112,36 +112,66 @@ async def analyze_impact_scope(self, failed_service: str)
 
 **Schema设计 (已优化)**：
 ```python
-# Weaviate Schema - 384维向量
+# EmbeddingCollection Schema - 语义搜索专用
 {
     "class": "EmbeddingCollection",
-    "vectorizer": "none",  # 使用自定义向量
+    "description": "语义搜索专用Collection，支持向量检索和rerank",
+    "vectorizer": "none",  # 手动提供384维向量
     "properties": [
-        {"name": "content", "dataType": ["text"]},
-        {"name": "source_type", "dataType": ["string"]},
-        {"name": "service_name", "dataType": ["string"]},
-        {"name": "hostname", "dataType": ["string"]},
-        {"name": "timestamp", "dataType": ["string"]},
-        {"name": "log_file", "dataType": ["string"]},
-        {"name": "line_number", "dataType": ["int"]},
-        {"name": "keywords", "dataType": ["string[]"]},
-        {"name": "confidence", "dataType": ["number"]}  # 新增置信度
+        {"name": "content", "dataType": ["text"], "description": "文档内容或日志内容", "tokenization": "word"},
+        {"name": "title", "dataType": ["string"], "description": "标题或摘要"},
+        {"name": "source_type", "dataType": ["string"], "description": "数据源类型: logs, wiki, gitlab, jira"},
+        {"name": "source_id", "dataType": ["string"], "description": "源系统中的唯一ID"},
+        # 日志特定字段
+        {"name": "service_name", "dataType": ["string"], "description": "服务名称"},
+        {"name": "hostname", "dataType": ["string"], "description": "机器名/主机名"},
+        {"name": "log_file", "dataType": ["string"], "description": "日志文件名"},
+        {"name": "line_number", "dataType": ["int"], "description": "日志行数"},
+        {"name": "log_level", "dataType": ["string"], "description": "日志级别: INFO, WARN, ERROR, DEBUG"},
+        {"name": "timestamp", "dataType": ["date"], "description": "时间戳"},
+        # 通用元数据字段
+        {"name": "category", "dataType": ["string"], "description": "分类"},
+        {"name": "tags", "dataType": ["string[]"], "description": "标签列表"},
+        {"name": "author", "dataType": ["string"], "description": "作者"},
+        {"name": "created_at", "dataType": ["date"], "description": "创建时间"},
+        {"name": "updated_at", "dataType": ["date"], "description": "更新时间"},
+        {"name": "metadata", "dataType": ["text"], "description": "额外元数据JSON字符串"},
+        # RAG专用字段
+        {"name": "chunk_index", "dataType": ["int"], "description": "文档分块索引"},
+        {"name": "chunk_size", "dataType": ["int"], "description": "分块大小"},
+        {"name": "parent_id", "dataType": ["string"], "description": "父文档ID"}
     ]
 }
 
-# MySQL Schema - BM25全文搜索
-CREATE TABLE fulltext_documents (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    content TEXT,
-    source_type VARCHAR(50),
-    service_name VARCHAR(100),
-    timestamp VARCHAR(50),
-    log_file VARCHAR(255),
-    keywords JSON,
-    FULLTEXT KEY ft_content (content),
-    INDEX idx_service (service_name),
-    INDEX idx_timestamp (timestamp)
-);
+# FullTextCollection Schema - BM25全文搜索专用
+{
+    "class": "FullTextCollection",
+    "description": "全文搜索专用Collection，支持BM25和关键词匹配",
+    "vectorizer": "none",
+    "properties": [
+        {"name": "content", "dataType": ["text"], "description": "文档内容或日志内容", "tokenization": "word"},
+        {"name": "title", "dataType": ["string"], "description": "标题或摘要"},
+        {"name": "source_type", "dataType": ["string"], "description": "数据源类型: logs, wiki, gitlab, jira"},
+        {"name": "source_id", "dataType": ["string"], "description": "源系统中的唯一ID"},
+        # 日志特定字段
+        {"name": "service_name", "dataType": ["string"], "description": "服务名称"},
+        {"name": "hostname", "dataType": ["string"], "description": "机器名/主机名"},
+        {"name": "log_file", "dataType": ["string"], "description": "日志文件名"},
+        {"name": "line_number", "dataType": ["int"], "description": "日志行数"},
+        {"name": "log_level", "dataType": ["string"], "description": "日志级别: INFO, WARN, ERROR, DEBUG"},
+        {"name": "timestamp", "dataType": ["date"], "description": "时间戳"},
+        # 通用元数据字段
+        {"name": "category", "dataType": ["string"], "description": "分类"},
+        {"name": "tags", "dataType": ["string[]"], "description": "标签列表"},
+        {"name": "author", "dataType": ["string"], "description": "作者"},
+        {"name": "created_at", "dataType": ["date"], "description": "创建时间"},
+        {"name": "updated_at", "dataType": ["date"], "description": "更新时间"},
+        {"name": "metadata", "dataType": ["text"], "description": "额外元数据JSON字符串"},
+        # 全文搜索优化字段
+        {"name": "keywords", "dataType": ["string[]"], "description": "提取的关键词列表"},
+        {"name": "entities", "dataType": ["string[]"], "description": "识别的实体列表"}
+    ]
+}
 ```
 
 ### 3. RCAChatService (`src/api/rca_chat_endpoint.py`) [新增]
@@ -633,19 +663,19 @@ class ImprovedCacheService:
 
 ## 数据统计 (最新)
 
-当前RAG v2.0系统包含的数据量：
+RAG v2.0系统数据存储架构：
 
-- **Weaviate向量索引**: 234条记录 (384维)
-- **MySQL全文索引**: 234条记录 (BM25)
-- **Neo4j知识图谱**: 27个节点，11个关系 (已过滤None值)
+- **Weaviate EmbeddingCollection**: 支持384维向量语义搜索
+- **Weaviate FullTextCollection**: 支持BM25全文搜索和关键词匹配
+- **Neo4j知识图谱**: 存储服务拓扑关系和实体关联 (已过滤None值)
 - **Redis缓存**: 实时缓存查询结果和向量嵌入
-- **数据源分布**: 
-  - 日志文件: 4个 (225条记录) - **主要训练数据**
-  - Wiki文档: 3个 (技术知识库)
-  - GitLab项目: 3个 (代码仓库信息)
-  - Jira工单: 3个 (问题追踪)
-- **数据质量**: 已过滤所有None/unknown/空值
-- **模型版本**: sentence-transformers/all-MiniLM-L6-v2
+- **数据源支持**: 
+  - 日志文件: Incident故障日志 - **主要训练数据**
+  - Wiki文档: 技术知识库
+  - GitLab项目: 代码仓库信息
+  - Jira工单: 问题追踪系统
+- **数据质量**: 自动过滤None/unknown/空值
+- **向量模型**: sentence-transformers/all-MiniLM-L6-v2
 
 ### 数据分布
 

@@ -35,7 +35,7 @@ graph TB
             
             subgraph "混合搜索子系统"
                 VectorSearch[向量搜索<br/>Weaviate 384维]
-                BM25Search[BM25全文搜索<br/>MySQL索引]
+                BM25Search[BM25全文搜索<br/>Weaviate FullTextCollection]
                 RerankAlgorithm[重排序算法<br/>RRF+加权融合]
             end
             
@@ -65,7 +65,7 @@ graph TB
     subgraph "数据存储层 Data Storage Layer"
         Weaviate[(Weaviate<br/>向量数据库<br/>384维向量)]
         Neo4j[(Neo4j<br/>知识图谱<br/>服务拓扑)]
-        MySQL[(MySQL<br/>关系数据库<br/>BM25索引)]
+        MySQL[(MySQL<br/>关系数据库<br/>结构化数据存储)]
         Redis[(Redis<br/>缓存层<br/>查询结果)]
     end
     
@@ -75,7 +75,7 @@ graph TB
         GraphPipeline[图谱构建管道<br/>服务依赖关系]
         
         subgraph "数据源 Data Sources"
-            IncidentLogs[Incident日志<br/>225条记录]
+            IncidentLogs[Incident日志<br/>故障数据源]
             WikiDocs[Wiki文档<br/>技术知识库]
             GitLabProjects[GitLab项目<br/>代码仓库]
             JiraTickets[Jira工单<br/>问题跟踪]
@@ -129,7 +129,7 @@ graph TB
     
     %% 数据库连接
     VectorSearch --> Weaviate
-    BM25Search --> MySQL
+    BM25Search --> Weaviate
     Neo4jQuery --> Neo4j
     RerankAlgorithm --> Redis
     
